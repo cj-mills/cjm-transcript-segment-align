@@ -42,3 +42,7 @@ class CombinedHtmlIds:
 
     # Keyboard System (stable container)
     KEYBOARD_SYSTEM = "sd-keyboard-system"
+
+    # Forced Alignment Controls
+    FA_CONTROLS = "sd-fa-controls"
+    FA_STATUS = "sd-fa-status"

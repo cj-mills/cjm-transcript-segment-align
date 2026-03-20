@@ -81,7 +81,7 @@ from cjm_transcript_segment_align.components.step_renderer import (
 from cjm_transcript_segment_align.components.keyboard_config import SWITCH_CHROME_BTN_ID
 from cjm_transcript_segment_align.routes.chrome import init_chrome_router
 from cjm_transcript_segment_align.routes.forced_alignment import (
-    init_forced_alignment_routers, FA_CONTAINER_ID, render_fa_controls,
+    init_forced_alignment_routers, render_fa_controls,
 )
 from cjm_transcript_segment_align.services.forced_alignment import ForcedAlignmentService
 
@@ -257,7 +257,7 @@ def render_demo_page(
         )
 
         # FA controls container (empty until seg init populates it)
-        fa_controls = Div(id=FA_CONTAINER_ID, cls=combine_classes(flex_display, items.center, gap(2)))
+        fa_controls = Div(id=CombinedHtmlIds.FA_CONTROLS, cls=combine_classes(flex_display, items.center, gap(2)))
 
         controls = Div(
             P("Width controls will appear here after initialization.", cls=placeholder_cls),

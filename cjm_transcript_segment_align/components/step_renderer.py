@@ -448,33 +448,26 @@ def render_combined_step(
     zone_change_js = None
 
     if is_seg_init:
-        # Get values from extracted state
         segments = seg_state["segments"]
         focused_index = seg_state["focused_index"]
         history = seg_state["history"]
         visible_count = seg_state["visible_count"]
         card_width = seg_state["card_width"]
 
-        # Always build combined KB system with both zones
-        # (alignment zone will have no items until alignment init completes)
         if align_urls:
             kb_manager, kb_system = build_combined_kb_system(seg_urls, align_urls)
             zone_change_js = generate_zone_change_js(switch_chrome_url)
-            if DEBUG_COMBINED_RENDER:
-                print(f"[COMBINED_RENDER] built combined kb_system with both zones")
 
-        # Render column body with viewport (kb_system=None, KB is in stable container)
         column_body = render_seg_column_body(
             segments=segments,
             focused_index=focused_index,
             visible_count=visible_count,
             card_width=card_width,
             urls=seg_urls,
-            kb_system=None,  # KB system is in stable container, not column body
+            kb_system=None,
         )
         mini_stats_text = render_seg_mini_stats_text(segments)
 
-        # Shared chrome with real segmentation content (includes alignment status)
         hints, toolbar, controls, footer = _render_shared_chrome(
             seg_state=seg_state,
             align_state=align_state,
@@ -482,19 +475,15 @@ def render_combined_step(
             kb_manager=kb_manager,
         )
 
-        # Left column with real content
         seg_col = _render_seg_column(
             is_active=True,
             column_body=column_body,
             mini_stats_text=mini_stats_text,
         )
     else:
-        # Shared chrome with placeholders (includes alignment status)
         hints, toolbar, controls, footer = _render_shared_chrome(
             align_state=align_state,
         )
-
-        # Left column with loading state + auto-trigger
         seg_col = _render_seg_column(
             is_active=True,
             init_url=seg_urls.init,
@@ -502,7 +491,6 @@ def render_combined_step(
 
     # --- Alignment column ---
     if is_align_init and align_urls:
-        # Get values from extracted state
         chunks = align_state["vad_chunks"]
         align_focused = align_state["focused_index"]
         align_visible = align_state["visible_count"]
@@ -511,36 +499,30 @@ def render_combined_step(
         audio_src_url = align_urls.audio_src if align_urls else ""
         audio_urls = [f"{audio_src_url}?path={mp}" for mp in media_paths] if audio_src_url and media_paths else []
 
-        if DEBUG_COMBINED_RENDER:
-            print(f"[COMBINED_RENDER] media_paths: {len(media_paths)}, audio_urls: {len(audio_urls)}")
-
         align_body = render_align_column_body(
             chunks=chunks,
             focused_index=align_focused,
             visible_count=align_visible,
             card_width=align_width,
             urls=align_urls,
-            kb_system=None,  # KB system is in stable container
+            kb_system=None,
             audio_urls=audio_urls,
         )
         align_mini_text = render_align_mini_stats_text(chunks)
-
         align_col = _render_alignment_column(
             is_active=False,
             column_body=align_body,
             mini_stats_text=align_mini_text,
         )
     elif align_urls and align_urls.init:
-        # Show loading state with auto-trigger
         align_col = _render_alignment_column(
             is_active=False,
             init_url=align_urls.init,
         )
     else:
-        # No alignment URLs — show column with default placeholder
         align_col = _render_alignment_column(is_active=False)
 
-    # Hidden input tracking active column (seg or align)
+    # Hidden input tracking active column
     active_column_input = Input(
         type="hidden",
         id=CombinedHtmlIds.ACTIVE_COLUMN_INPUT,
@@ -548,10 +530,10 @@ def render_combined_step(
         value="seg",
     )
 
-    # Stable keyboard system container (outside columns)
+    # Stable keyboard system container
     kb_container = _render_keyboard_system_container(kb_system=kb_system)
 
-    # Hidden button for chrome swap HTMX trigger (clicked by zone change JS)
+    # Hidden button for chrome swap HTMX trigger
     chrome_switch_btn = None
     if switch_chrome_url and align_urls:
         chrome_switch_btn = Button(
@@ -562,13 +544,13 @@ def render_combined_step(
             hx_swap="none",
         )
 
-    if DEBUG_COMBINED_RENDER:
-        print(f"[COMBINED_RENDER] kb_container rendered with kb_system={kb_system is not None}")
-        print(f"[COMBINED_RENDER] zone_change_js present: {zone_change_js is not None}")
-        print(f"[COMBINED_RENDER] chrome_switch_btn present: {chrome_switch_btn is not None}")
+    # FA controls container (empty initially, populated by seg init OOB swap)
+    fa_controls = Div(
+        id=CombinedHtmlIds.FA_CONTROLS,
+        cls=combine_classes(flex_display, items.center, gap(2)),
+    )
 
     return Div(
-        # Header
         Div(
             H2("Segment & Align", cls=combine_classes(font_size._3xl, font_weight.bold)),
             P(
@@ -576,45 +558,24 @@ def render_combined_step(
                 cls=combine_classes(text_dui.base_content.opacity(70), m.b(2))
             ),
         ),
-
-        # Shared keyboard hints
         hints,
-
-        # Shared toolbar and controls
         toolbar,
+        fa_controls,
         controls,
-
-        # Dual-column content area
         Div(
             seg_col,
             align_col,
             cls=combine_classes(
-                grow(),
-                min_h(0),
-                flex_display,
-                flex_direction.col,
-                flex_direction.row.lg,
-                gap(4),
-                overflow.hidden,
-                p(1),
+                grow(), min_h(0),
+                flex_display, flex_direction.col, flex_direction.row.lg,
+                gap(4), overflow.hidden, p(1),
             )
         ),
-
-        # Shared footer
         footer,
-
-        # Stable keyboard system container (outside columns, won't be swapped)
         kb_container,
-
-        # Zone change JavaScript (when align_urls available)
         zone_change_js,
-
-        # Hidden chrome switch button (for HTMX-triggered chrome swaps)
         chrome_switch_btn,
-
-        # Hidden active column state
         active_column_input,
-
         id=SegmentationHtmlIds.SEG_CONTAINER,
         cls=combine_classes(
             w.full, h.full,

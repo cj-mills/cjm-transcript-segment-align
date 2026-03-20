@@ -31,16 +31,17 @@ from cjm_transcript_segmentation.components.card_stack_config import SEG_CS_CONF
 from cjm_transcript_vad_align.models import VADChunk
 from cjm_transcript_source_select.services.source import SourceService
 
-from ..html_ids import CombinedHtmlIds
 from cjm_transcript_segment_align.components.step_renderer import (
     render_alignment_status, render_seg_mini_stats_badge,
 )
 from ..services.forced_alignment import ForcedAlignmentService
 
 # %% ../../nbs/routes/forced_alignment.ipynb #cell-ids
-# Stable HTML IDs for forced alignment UI elements
-FA_CONTAINER_ID = "sd-fa-controls"
-FA_STATUS_ID = "sd-fa-status"
+from ..html_ids import CombinedHtmlIds
+
+# Convenience aliases for FA HTML IDs
+FA_CONTAINER_ID = CombinedHtmlIds.FA_CONTROLS
+FA_STATUS_ID = CombinedHtmlIds.FA_STATUS
 
 # %% ../../nbs/routes/forced_alignment.ipynb #cell-render-button
 def render_fa_trigger_button(

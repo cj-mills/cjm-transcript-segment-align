@@ -39,18 +39,18 @@ graph LR
     routes_forced_alignment[routes.forced_alignment<br/>forced_alignment]
     services_forced_alignment[services.forced_alignment<br/>forced_alignment]
 
-    components_handlers --> components_step_renderer
-    components_handlers --> html_ids
     components_handlers --> components_keyboard_config
+    components_handlers --> html_ids
+    components_handlers --> components_step_renderer
     components_keyboard_config --> html_ids
-    components_step_renderer --> html_ids
-    components_step_renderer --> components_keyboard_config
     components_step_renderer --> components_helpers
+    components_step_renderer --> components_keyboard_config
+    components_step_renderer --> html_ids
     routes_chrome --> html_ids
     routes_chrome --> components_keyboard_config
     routes_chrome --> components_step_renderer
-    routes_forced_alignment --> components_step_renderer
     routes_forced_alignment --> html_ids
+    routes_forced_alignment --> components_step_renderer
     routes_forced_alignment --> services_forced_alignment
 ```
 
@@ -214,8 +214,8 @@ def init_forced_alignment_routers(
 #### Variables
 
 ``` python
-FA_CONTAINER_ID = 'sd-fa-controls'
-FA_STATUS_ID = 'sd-fa-status'
+FA_CONTAINER_ID
+FA_STATUS_ID
 ```
 
 ### forced_alignment (`forced_alignment.ipynb`)
