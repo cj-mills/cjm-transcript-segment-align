@@ -8,3 +8,477 @@
 ``` bash
 pip install cjm_transcript_segment_align
 ```
+
+## Project Structure
+
+    nbs/
+    ├── components/ (4)
+    │   ├── handlers.ipynb         # Handler wrappers for cross-domain coordination (alignment status updates)
+    │   ├── helpers.ipynb          # State extraction helpers for cross-domain coordination in Phase 2 combined step
+    │   ├── keyboard_config.ipynb  # Shared keyboard navigation configuration for the combined Phase 2 step
+    │   └── step_renderer.ipynb    # Phase 2 combined step renderer: dual-column layout for Segment & Align
+    ├── routes/ (1)
+    │   └── chrome.ipynb  # Shared chrome switching route handlers for the combined Phase 2 step
+    └── html_ids.ipynb  # HTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome
+
+Total: 6 notebooks across 3 directories
+
+## Module Dependencies
+
+``` mermaid
+graph LR
+    components_handlers[components.handlers<br/>handlers]
+    components_helpers[components.helpers<br/>helpers]
+    components_keyboard_config[components.keyboard_config<br/>keyboard_config]
+    components_step_renderer[components.step_renderer<br/>step_combined]
+    html_ids[html_ids<br/>html_ids]
+    routes_chrome[routes.chrome<br/>chrome]
+
+    components_handlers --> components_step_renderer
+    components_handlers --> components_keyboard_config
+    components_handlers --> html_ids
+    components_keyboard_config --> html_ids
+    components_step_renderer --> components_keyboard_config
+    components_step_renderer --> components_helpers
+    components_step_renderer --> html_ids
+    routes_chrome --> components_step_renderer
+    routes_chrome --> html_ids
+    routes_chrome --> components_keyboard_config
+```
+
+*10 cross-module dependencies detected*
+
+## CLI Reference
+
+No CLI commands found in this project.
+
+## Module Overview
+
+Detailed documentation for each module in the project:
+
+### chrome (`chrome.ipynb`)
+
+> Shared chrome switching route handlers for the combined Phase 2 step
+
+#### Import
+
+``` python
+from cjm_transcript_segment_align.routes.chrome import (
+    DEBUG_SWITCH_CHROME,
+    init_chrome_router
+)
+```
+
+#### Functions
+
+``` python
+async def _handle_switch_chrome(
+    state_store:SQLiteWorkflowStateStore,  # State store instance
+    workflow_id:str,  # Workflow identifier
+    request,  # FastHTML request object
+    sess,  # FastHTML session object
+    seg_urls:SegmentationUrls,  # URL bundle for segmentation routes
+    align_urls:AlignmentUrls,  # URL bundle for alignment routes
+) -> tuple:  # OOB swaps for shared chrome containers
+    "Switch shared chrome content based on active column."
+```
+
+``` python
+def init_chrome_router(
+    state_store: SQLiteWorkflowStateStore,  # State store instance
+    workflow_id: str,  # Workflow identifier
+    seg_urls: SegmentationUrls,  # URL bundle for segmentation routes
+    align_urls: AlignmentUrls,  # URL bundle for alignment routes
+    prefix: str,  # Route prefix (e.g., "/workflow/core/chrome")
+) -> Tuple[APIRouter, Dict[str, Callable]]:  # (router, route_dict)
+    "Initialize chrome switching routes."
+```
+
+#### Variables
+
+``` python
+DEBUG_SWITCH_CHROME = False
+```
+
+### handlers (`handlers.ipynb`)
+
+> Handler wrappers for cross-domain coordination (alignment status
+> updates)
+
+#### Import
+
+``` python
+from cjm_transcript_segment_align.components.handlers import (
+    wrapped_seg_split,
+    wrapped_seg_merge,
+    wrapped_seg_undo,
+    wrapped_seg_reset,
+    wrapped_seg_ai_split,
+    wrap_seg_mutation_handler,
+    wrap_align_mutation_handler,
+    create_seg_init_chrome_wrapper,
+    create_align_init_chrome_wrapper
+)
+```
+
+#### Functions
+
+``` python
+def _find_session_id(args, kwargs):
+    """Find session_id from args or kwargs."""
+    # First check kwargs
+    if 'sess' in kwargs
+    "Find session_id from args or kwargs."
+```
+
+``` python
+def wrap_seg_mutation_handler(
+    handler: Callable,  # Handler function to wrap
+) -> Callable:  # Wrapped handler that appends alignment status OOB
+    """
+    Wrap a segmentation mutation handler to add alignment status OOB.
+    
+    The handler is expected to take (state_store, workflow_id, ...) as first params.
+    """
+```
+
+``` python
+def wrap_align_mutation_handler(
+    handler: Callable,  # Handler function to wrap
+) -> Callable:  # Wrapped handler that appends alignment status OOB
+    """
+    Wrap an alignment mutation handler to add alignment status OOB.
+    
+    The handler is expected to take (state_store, workflow_id, ...) as first params.
+    """
+```
+
+``` python
+def create_seg_init_chrome_wrapper(
+    align_urls:AlignmentUrls,  # URL bundle for alignment routes (for KB system)
+    switch_chrome_url:str,  # URL for chrome switching (for KB system)
+) -> Callable:  # Wrapped handler that builds KB system and shared chrome
+    """
+    Create a wrapper for seg init that builds combined KB system and shared chrome.
+    
+    This is a factory that captures the URLs needed for KB system assembly.
+    """
+```
+
+``` python
+def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds alignment status
+    """Create a wrapper for align init that adds mini-stats and alignment status.
+    
+    Alignment init is simpler than seg init - it doesn't need to build the
+    full KB system (seg init handles that). It just updates alignment-specific
+    chrome and the alignment status badge.
+    """
+    async def wrapped_align_init(
+        state_store:WorkflowStateStore,
+        workflow_id:str,
+        source_service:SourceService,
+        alignment_service:AlignmentService,
+        request:Any,
+        sess:Any,
+        urls:AlignmentUrls,
+        visible_count:int=5,
+        card_width:int=40,
+    )
+    """
+    Create a wrapper for align init that adds mini-stats and alignment status.
+    
+    Alignment init is simpler than seg init - it doesn't need to build the
+    full KB system (seg init handles that). It just updates alignment-specific
+    chrome and the alignment status badge.
+    """
+```
+
+### helpers (`helpers.ipynb`)
+
+> State extraction helpers for cross-domain coordination in Phase 2
+> combined step
+
+#### Import
+
+``` python
+from cjm_transcript_segment_align.components.helpers import (
+    SEG_DEFAULT_VISIBLE_COUNT,
+    SEG_DEFAULT_CARD_WIDTH,
+    ALIGN_DEFAULT_VISIBLE_COUNT,
+    ALIGN_DEFAULT_CARD_WIDTH,
+    check_alignment_ready,
+    extract_seg_state,
+    extract_alignment_state,
+    get_segment_count,
+    get_chunk_count
+)
+```
+
+#### Functions
+
+``` python
+def check_alignment_ready(
+    segment_count:int,  # Number of text segments
+    chunk_count:int,  # Number of VAD chunks
+) -> bool:  # True if counts match for 1:1 alignment
+    "Check if segment and VAD chunk counts match for 1:1 alignment."
+```
+
+``` python
+def extract_seg_state(
+    ctx:InteractionContext,  # Interaction context with state
+) -> Dict[str, Any]:  # Extracted state values
+    "Extract segmentation state as explicit values for renderers."
+```
+
+``` python
+def extract_alignment_state(
+    ctx:InteractionContext,  # Interaction context with state
+) -> Dict[str, Any]:  # Extracted state values
+    "Extract alignment state as explicit values for renderers."
+```
+
+``` python
+def get_segment_count(
+    ctx:InteractionContext,  # Interaction context with state
+) -> int:  # Number of segments
+    "Get segment count from state without full extraction."
+```
+
+``` python
+def get_chunk_count(
+    ctx:InteractionContext,  # Interaction context with state
+) -> int:  # Number of VAD chunks
+    "Get VAD chunk count from state without full extraction."
+```
+
+#### Variables
+
+``` python
+SEG_DEFAULT_VISIBLE_COUNT = 3
+SEG_DEFAULT_CARD_WIDTH = 80
+ALIGN_DEFAULT_VISIBLE_COUNT = 5
+ALIGN_DEFAULT_CARD_WIDTH = 40
+```
+
+### html_ids (`html_ids.ipynb`)
+
+> HTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome
+
+#### Import
+
+``` python
+from cjm_transcript_segment_align.html_ids import (
+    CombinedHtmlIds
+)
+```
+
+#### Classes
+
+``` python
+class CombinedHtmlIds:
+    "HTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome."
+    
+    def as_selector(
+            id_str:str  # The HTML ID to convert
+        ) -> str:  # CSS selector with # prefix
+        "Convert an ID to a CSS selector format."
+```
+
+### keyboard_config (`keyboard_config.ipynb`)
+
+> Shared keyboard navigation configuration for the combined Phase 2 step
+
+#### Import
+
+``` python
+from cjm_transcript_segment_align.components.keyboard_config import (
+    DEBUG_KB_SYSTEM,
+    ZONE_CHANGE_CALLBACK,
+    SWITCH_CHROME_BTN_ID,
+    render_keyboard_hints_collapsible,
+    build_combined_kb_system,
+    generate_zone_change_js
+)
+```
+
+#### Functions
+
+``` python
+def render_keyboard_hints_collapsible(
+    manager:ZoneManager,  # Keyboard zone manager with actions configured
+    container_id:str="sd-keyboard-hints",  # HTML ID for the hints container
+    include_zone_switch:bool=False,  # Whether to include zone switch hints
+) -> Any:  # Collapsible keyboard hints component
+    "Render keyboard shortcut hints in a collapsible DaisyUI collapse."
+```
+
+``` python
+def build_combined_kb_system(
+    seg_urls:SegmentationUrls,  # URL bundle for segmentation routes
+    align_urls:AlignmentUrls,  # URL bundle for alignment routes
+) -> Tuple[ZoneManager, Any]:  # (keyboard manager, rendered keyboard system)
+    "Build combined keyboard system with segmentation and alignment zones."
+```
+
+``` python
+def generate_zone_change_js(
+    switch_chrome_url:str="",  # URL for chrome swap handler (empty = no swap)
+) -> Script:  # Script element with zone change callback and click handlers
+    "Generate JavaScript for zone change handling and column click handlers."
+```
+
+#### Variables
+
+``` python
+DEBUG_KB_SYSTEM = True
+ZONE_CHANGE_CALLBACK = 'onCombinedZoneChange'
+SWITCH_CHROME_BTN_ID = 'sd-switch-chrome-btn'
+```
+
+### step_combined (`step_renderer.ipynb`)
+
+> Phase 2 combined step renderer: dual-column layout for Segment & Align
+
+#### Import
+
+``` python
+from cjm_transcript_segment_align.components.step_renderer import (
+    DEBUG_COMBINED_RENDER,
+    render_seg_mini_stats_badge,
+    render_align_mini_stats_badge,
+    render_alignment_status_text,
+    render_alignment_status,
+    render_footer_inner_content,
+    render_combined_step
+)
+```
+
+#### Functions
+
+``` python
+def _render_column_header(
+    title:str,  # Column title (e.g., "Text Decomposition")
+    stats_id:str,  # HTML ID for the mini-stats badge area
+    header_id:str,  # HTML ID for the column header container
+    initial_text:str="--",  # Initial text for the mini-stats badge
+) -> Any:  # Column header component
+    "Render a column header with title and mini-stats badge."
+```
+
+``` python
+def render_seg_mini_stats_badge(
+    segments:List[TextSegment],  # Current segments
+    oob:bool=False,  # Whether to render as OOB swap
+) -> Any:  # Mini-stats badge Span
+    "Render the segmentation mini-stats badge for the column header."
+```
+
+``` python
+def render_align_mini_stats_badge(
+    chunks:List[VADChunk],  # Current VAD chunks
+    oob:bool=False,  # Whether to render as OOB swap
+) -> Any:  # Mini-stats badge Span
+    "Render the alignment mini-stats badge for the column header."
+```
+
+``` python
+def render_alignment_status_text(
+    segment_count:int,  # Number of text segments
+    chunk_count:int,  # Number of VAD chunks
+) -> str:  # Status message text
+    "Generate alignment status message based on segment and VAD chunk counts."
+```
+
+``` python
+def render_alignment_status(
+    segment_count:int,  # Number of text segments
+    chunk_count:int,  # Number of VAD chunks
+    oob:bool=False,  # Whether to render as OOB swap
+) -> Any:  # Alignment status badge component
+    "Render the alignment status indicator badge."
+```
+
+``` python
+def render_footer_inner_content(
+    column_footer:Any,  # Column-specific footer content (decomp or align)
+    segment_count:int,  # Number of text segments
+    chunk_count:int,  # Number of VAD chunks
+) -> Any:  # Styled wrapper div with column footer and alignment status
+    """
+    Render the footer inner content with consistent styling.
+    
+    This ensures the footer layout (justify-between) is preserved across
+    all OOB swaps. Both the column-specific footer content and the
+    alignment status indicator are wrapped in a flex container.
+    """
+```
+
+``` python
+def _placeholder(
+    text:str,  # Placeholder message
+) -> Any:  # Styled placeholder paragraph
+    "Render a placeholder text element for uninitialized chrome containers."
+```
+
+``` python
+def _render_shared_chrome(
+    seg_state:dict=None,  # Extracted segmentation state (None = show placeholders)
+    align_state:dict=None,  # Extracted alignment state (None = no VAD data yet)
+    urls:SegmentationUrls=None,  # Segmentation URL bundle (required when seg_state provided)
+    kb_manager:Any=None,  # Keyboard manager (required when seg_state provided)
+) -> tuple:  # (hints, toolbar, controls, footer)
+    """
+    Render shared chrome containers, populated with segmentation content when initialized.
+    
+    Takes extracted state dicts from `extract_seg_state()` and `extract_alignment_state()`
+    which contain deserialized TextSegment and VADChunk objects.
+    """
+```
+
+``` python
+def _render_seg_column(
+    is_active:bool=True,  # Whether this column is initially active
+    column_body:Any=None,  # Pre-rendered column body (None = not initialized)
+    mini_stats_text:str="--",  # Mini-stats badge text
+    init_url:str="",  # URL for auto-trigger initialization
+) -> Any:  # Left column component
+    "Render the left segmentation column."
+```
+
+``` python
+def _render_alignment_column(
+    is_active:bool=False,  # Whether this column is initially active
+    column_body:Any=None,  # Pre-rendered column body (None = not initialized)
+    mini_stats_text:str="--",  # Mini-stats badge text
+    init_url:str="",  # URL for auto-trigger initialization
+) -> Any:  # Right column component
+    "Render the right alignment column."
+```
+
+``` python
+def _render_keyboard_system_container(
+    kb_system:Any=None,  # Rendered keyboard system (None = empty container)
+    oob:bool=False,  # Whether to render as OOB swap
+) -> Any:  # Div with id=KEYBOARD_SYSTEM containing KB elements
+    "Render stable container for keyboard navigation system elements."
+```
+
+``` python
+def render_combined_step(
+    ctx:InteractionContext,  # Interaction context with state and data
+    seg_urls:SegmentationUrls=None,  # URL bundle for segmentation routes
+    align_urls:AlignmentUrls=None,  # URL bundle for alignment routes
+    switch_chrome_url:str="",  # URL for chrome switching route
+) -> Any:  # FastHTML component with full dual-column layout
+    "Render Phase 2: Combined Segment & Align step with dual-column layout."
+```
+
+#### Variables
+
+``` python
+DEBUG_COMBINED_RENDER = True
+_FOOTER_INNER_CLS
+_SEG_COLUMN_CLS
+_ALIGNMENT_COLUMN_CLS
+```
