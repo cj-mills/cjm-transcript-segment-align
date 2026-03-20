@@ -80,6 +80,10 @@ from cjm_transcript_segment_align.components.step_renderer import (
 )
 from cjm_transcript_segment_align.components.keyboard_config import SWITCH_CHROME_BTN_ID
 from cjm_transcript_segment_align.routes.chrome import init_chrome_router
+from cjm_transcript_segment_align.routes.forced_alignment import (
+    init_forced_alignment_routers, FA_CONTAINER_ID, render_fa_controls,
+)
+from cjm_transcript_segment_align.services.forced_alignment import ForcedAlignmentService
 
 
 # =============================================================================
@@ -252,6 +256,9 @@ def render_demo_page(
             cls=str(p(2))
         )
 
+        # FA controls container (empty until seg init populates it)
+        fa_controls = Div(id=FA_CONTAINER_ID, cls=combine_classes(flex_display, items.center, gap(2)))
+
         controls = Div(
             P("Width controls will appear here after initialization.", cls=placeholder_cls),
             id=CombinedHtmlIds.SHARED_CONTROLS,
@@ -300,6 +307,7 @@ def render_demo_page(
             # Shared chrome
             hints,
             toolbar,
+            fa_controls,
             controls,
 
             # Dual-column content area
@@ -364,10 +372,13 @@ def main():
     # Set up state store
     # -------------------------------------------------------------------------
     temp_db = Path(tempfile.gettempdir()) / "cjm_transcript_segment_align_demo_state.db"
+    # Clean state on each launch so demo always starts fresh
+    if temp_db.exists():
+        temp_db.unlink()
     state_store = SQLiteWorkflowStateStore(temp_db)
     workflow_id = "sa-demo"
 
-    print(f"  State store: {temp_db}")
+    print(f"  State store: {temp_db} (fresh)")
 
     # -------------------------------------------------------------------------
     # Set up plugin manager and load plugins
@@ -415,6 +426,21 @@ def main():
     )
     segmentation_service = SegmentationService(plugin_manager, nltk_plugin_name)
     alignment_service = AlignmentService(plugin_manager, vad_plugin_name)
+
+    # Load Qwen3 forced alignment plugin (optional)
+    fa_plugin_name = "cjm-transcription-plugin-qwen3-forced-aligner"
+    fa_meta = plugin_manager.get_discovered_meta(fa_plugin_name)
+    if fa_meta:
+        try:
+            success = plugin_manager.load_plugin(fa_meta, {"language": "English"})
+            print(f"  {fa_plugin_name}: {'loaded' if success else 'failed'}")
+        except Exception as e:
+            print(f"  {fa_plugin_name}: error - {e}")
+    else:
+        print(f"  {fa_plugin_name}: not found (FA button will be hidden)")
+
+    fa_service = ForcedAlignmentService(plugin_manager, fa_plugin_name)
+    fa_is_available = fa_service.is_available()
 
     # Initialize selection state
     def init_demo_state(sess):
@@ -491,12 +517,29 @@ def main():
     switch_chrome_url = chrome_routes["switch_chrome"].to()
 
     # -------------------------------------------------------------------------
+    # Set up forced alignment routes
+    # -------------------------------------------------------------------------
+    fa_router, fa_routes = init_forced_alignment_routers(
+        state_store=state_store,
+        workflow_id=workflow_id,
+        fa_service=fa_service,
+        source_service=source_service,
+        seg_urls=seg_urls,
+        prefix="/fa",
+    )
+    fa_trigger_url = fa_routes["trigger"].to() if fa_is_available else ""
+    fa_toggle_url = fa_routes["toggle"].to() if fa_is_available else ""
+
+    # -------------------------------------------------------------------------
     # Override init routes with combined wrappers
     # -------------------------------------------------------------------------
-    # Seg init wrapper (builds combined KB system + shared chrome)
+    # Seg init wrapper (builds combined KB system + shared chrome + FA controls)
     wrapped_seg_init_fn = create_seg_init_chrome_wrapper(
         align_urls=align_urls,
         switch_chrome_url=switch_chrome_url,
+        fa_trigger_url=fa_trigger_url,
+        fa_toggle_url=fa_toggle_url,
+        fa_available=fa_is_available,
     )
 
     seg_init_router = APIRouter(prefix="/seg/workflow")
@@ -539,7 +582,7 @@ def main():
     # Register routes
     # -------------------------------------------------------------------------
     register_routes(
-        app, router, audio_router, chrome_router,
+        app, router, audio_router, chrome_router, fa_router,
         seg_init_router, align_init_router,
         *seg_routers, *align_routers,
     )

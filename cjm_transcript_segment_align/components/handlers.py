@@ -154,11 +154,18 @@ def wrap_align_mutation_handler(
 def create_seg_init_chrome_wrapper(
     align_urls:AlignmentUrls,  # URL bundle for alignment routes (for KB system)
     switch_chrome_url:str,  # URL for chrome switching (for KB system)
+    fa_trigger_url:str="",  # URL for forced alignment trigger (optional)
+    fa_toggle_url:str="",  # URL for forced alignment toggle (optional)
+    fa_available:bool=False,  # Whether forced alignment plugin is available
 ) -> Callable:  # Wrapped handler that builds KB system and shared chrome
     """Create a wrapper for seg init that builds combined KB system and shared chrome.
     
     This is a factory that captures the URLs needed for KB system assembly.
+    Optionally includes forced alignment controls if FA plugin is available.
     """
+    # Import here to avoid circular imports (routes module imports from components)
+    from cjm_transcript_segment_align.routes.forced_alignment import render_fa_controls
+
     async def wrapped_seg_init(
         state_store:WorkflowStateStore,
         workflow_id:str,
@@ -181,6 +188,7 @@ def create_seg_init_chrome_wrapper(
         
         # Get VAD chunk count for alignment status
         workflow_state = state_store.get_state(workflow_id, session_id)
+        seg_state = workflow_state.get("step_states", {}).get("segmentation", {})
         chunk_count = len(workflow_state.get("step_states", {}).get("alignment", {}).get("vad_chunks", []))
         segment_count = len(result.segments)
         
@@ -248,9 +256,20 @@ def create_seg_init_chrome_wrapper(
         # Mini-stats badge OOB
         mini_stats_oob = render_seg_mini_stats_badge(result.segments, oob=True)
         
+        # FA controls OOB (trigger button or toggle based on state)
+        active_presplit = seg_state.get("active_presplit")
+        fa_controls_oob = render_fa_controls(
+            trigger_url=fa_trigger_url,
+            toggle_url=fa_toggle_url,
+            active_presplit=active_presplit,
+            fa_available=fa_available,
+            oob=True,
+        )
+        
         return (
             result.column_body, kb_system_oob, zone_change_js, chrome_switch_btn,
             hints_oob, toolbar_oob, controls_oob, footer_oob, mini_stats_oob,
+            fa_controls_oob,
         )
     
     return wrapped_seg_init

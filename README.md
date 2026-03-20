@@ -17,13 +17,14 @@ pip install cjm_transcript_segment_align
     │   ├── helpers.ipynb          # State extraction helpers for cross-domain coordination in Phase 2 combined step
     │   ├── keyboard_config.ipynb  # Shared keyboard navigation configuration for the combined Phase 2 step
     │   └── step_renderer.ipynb    # Phase 2 combined step renderer: dual-column layout for Segment & Align
-    ├── routes/ (1)
-    │   └── chrome.ipynb  # Shared chrome switching route handlers for the combined Phase 2 step
+    ├── routes/ (2)
+    │   ├── chrome.ipynb            # Shared chrome switching route handlers for the combined Phase 2 step
+    │   └── forced_alignment.ipynb  # Routes for triggering forced alignment, polling progress, and toggling between NLTK and force-aligned pre-splits
     ├── services/ (1)
     │   └── forced_alignment.ipynb  # Forced alignment service for audio-informed text pre-splitting via forced alignment plugin
     └── html_ids.ipynb  # HTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome
 
-Total: 7 notebooks across 3 directories
+Total: 8 notebooks across 3 directories
 
 ## Module Dependencies
 
@@ -35,21 +36,25 @@ graph LR
     components_step_renderer[components.step_renderer<br/>step_combined]
     html_ids[html_ids<br/>html_ids]
     routes_chrome[routes.chrome<br/>chrome]
+    routes_forced_alignment[routes.forced_alignment<br/>forced_alignment]
     services_forced_alignment[services.forced_alignment<br/>forced_alignment]
 
     components_handlers --> components_step_renderer
     components_handlers --> html_ids
     components_handlers --> components_keyboard_config
     components_keyboard_config --> html_ids
-    components_step_renderer --> components_helpers
     components_step_renderer --> html_ids
     components_step_renderer --> components_keyboard_config
-    routes_chrome --> components_step_renderer
+    components_step_renderer --> components_helpers
     routes_chrome --> html_ids
     routes_chrome --> components_keyboard_config
+    routes_chrome --> components_step_renderer
+    routes_forced_alignment --> components_step_renderer
+    routes_forced_alignment --> html_ids
+    routes_forced_alignment --> services_forced_alignment
 ```
 
-*10 cross-module dependencies detected*
+*13 cross-module dependencies detected*
 
 ## CLI Reference
 
@@ -101,6 +106,116 @@ def init_chrome_router(
 
 ``` python
 DEBUG_SWITCH_CHROME = False
+```
+
+### forced_alignment (`forced_alignment.ipynb`)
+
+> Routes for triggering forced alignment, polling progress, and toggling
+> between NLTK and force-aligned pre-splits
+
+#### Import
+
+``` python
+from cjm_transcript_segment_align.routes.forced_alignment import (
+    FA_CONTAINER_ID,
+    FA_STATUS_ID,
+    render_fa_trigger_button,
+    render_fa_progress,
+    render_fa_toggle,
+    render_fa_controls,
+    init_forced_alignment_routers
+)
+```
+
+#### Functions
+
+``` python
+def render_fa_trigger_button(
+    trigger_url: str,  # URL for forced alignment trigger route
+    disabled: bool = False,  # Whether button is disabled
+) -> Any:  # Force Align trigger button
+    "Render the Force Align trigger button."
+```
+
+``` python
+def render_fa_progress(
+    progress_val: float,  # Progress value 0.0-1.0
+    message: str,  # Progress stage message
+    progress_url: str,  # URL for progress polling
+) -> Any:  # Progress indicator with polling
+    "Render forced alignment progress indicator with HTMX polling."
+```
+
+``` python
+def render_fa_toggle(
+    active_presplit: str,  # "nltk" or "forced_alignment"
+    toggle_url: str,  # URL for toggle route
+) -> Any:  # Toggle button group
+    "Render the NLTK / Force Aligned toggle button group."
+```
+
+``` python
+def render_fa_controls(
+    trigger_url: str = "",  # URL for trigger route
+    toggle_url: str = "",  # URL for toggle route
+    active_presplit: Optional[str] = None,  # Current active mode (None = no FA done yet)
+    fa_available: bool = False,  # Whether FA plugin is available
+    oob: bool = False,  # Whether to render as OOB swap
+) -> Any:  # FA controls container
+    """
+    Render the forced alignment controls container.
+    
+    Shows either:
+    - Trigger button (if FA not yet run)
+    - Toggle (if FA has been run)
+    - Nothing (if FA plugin not available)
+    """
+```
+
+``` python
+async def _handle_fa_trigger(
+    state_store: SQLiteWorkflowStateStore,
+    workflow_id: str,
+    fa_service: ForcedAlignmentService,
+    source_service: SourceService,
+    request: Any,
+    sess: Any,
+    seg_urls: SegmentationUrls,
+    progress_url: str,
+    toggle_url: str,
+) -> Any:  # OOB updates for card stack, alignment status, FA controls, mini-stats
+    "Trigger forced alignment and replace working segments."
+```
+
+``` python
+async def _handle_fa_toggle(
+    state_store: SQLiteWorkflowStateStore,
+    workflow_id: str,
+    request: Any,
+    sess: Any,
+    seg_urls: SegmentationUrls,
+    toggle_url: str,
+) -> Any:  # OOB updates for card stack, alignment status, FA controls, mini-stats
+    "Toggle between NLTK and force-aligned pre-splits."
+```
+
+``` python
+def init_forced_alignment_routers(
+    state_store: SQLiteWorkflowStateStore,  # State store instance
+    workflow_id: str,  # Workflow identifier
+    fa_service: ForcedAlignmentService,  # Forced alignment service
+    source_service: SourceService,  # Source service for audio paths/text
+    seg_urls: SegmentationUrls,  # Segmentation URL bundle
+    prefix: str,  # Route prefix (e.g., "/fa")
+) -> Tuple[APIRouter, Dict[str, Callable]]:  # (router, route_dict)
+    "Initialize forced alignment routes."
+```
+
+#### Variables
+
+``` python
+FA_CONTAINER_ID = 'sd-fa-controls'
+FA_STATUS_ID = 'sd-fa-status'
 ```
 
 ### forced_alignment (`forced_alignment.ipynb`)
@@ -296,11 +411,15 @@ def wrap_align_mutation_handler(
 def create_seg_init_chrome_wrapper(
     align_urls:AlignmentUrls,  # URL bundle for alignment routes (for KB system)
     switch_chrome_url:str,  # URL for chrome switching (for KB system)
+    fa_trigger_url:str="",  # URL for forced alignment trigger (optional)
+    fa_toggle_url:str="",  # URL for forced alignment toggle (optional)
+    fa_available:bool=False,  # Whether forced alignment plugin is available
 ) -> Callable:  # Wrapped handler that builds KB system and shared chrome
     """
     Create a wrapper for seg init that builds combined KB system and shared chrome.
     
     This is a factory that captures the URLs needed for KB system assembly.
+    Optionally includes forced alignment controls if FA plugin is available.
     """
 ```
 
