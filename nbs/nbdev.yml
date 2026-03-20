@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "cjm-transcript-segment-align"
+  site-url: "https://cj-mills.github.io/cjm-transcript-segment-align"
+  description: "FastHTML dual-column text segmentation & VAD alignment UI for transcript decomposition workflows with forced alignment-based text splitting for aligning text segments with VAD chunks."
+  repo-branch: main
+  repo-url: "https://github.com/cj-mills/cjm-transcript-segment-align"

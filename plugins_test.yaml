@@ -1,0 +1,54 @@
+plugins:
+
+  # ----------------------------------------------------------------
+  # Text Processing: NLTK
+  # Sentence splitting and tokenization
+  # ----------------------------------------------------------------
+  - name: nltk-text
+    env_name: test-nltk
+    
+    # Environment File
+    env_file: "https://raw.githubusercontent.com/cj-mills/cjm-text-plugin-nltk/main/environment.yml"
+    
+    # The Plugin Package
+    package: "git+https://github.com/cj-mills/cjm-text-plugin-nltk.git"
+    
+    # Interface Libraries
+    interface_libs:
+      - "git+https://github.com/cj-mills/cjm-plugin-system.git"
+      - "git+https://github.com/cj-mills/cjm-text-plugin-system.git"
+
+  # ----------------------------------------------------------------
+  # Media Analysis: Silero VAD
+  # CPU-based speech detection
+  # ----------------------------------------------------------------
+  - name: silero-vad
+    env_name: test-silero-vad
+    
+    # Environment File
+    env_file: "https://raw.githubusercontent.com/cj-mills/cjm-media-plugin-silero-vad/main/environment.yml"
+    
+    # The Plugin Package
+    package: "git+https://github.com/cj-mills/cjm-media-plugin-silero-vad.git"
+    
+    # Interface Libraries
+    interface_libs:
+      - "git+https://github.com/cj-mills/cjm-plugin-system.git"
+      - "git+https://github.com/cj-mills/cjm-media-plugin-system.git"
+
+  # ----------------------------------------------------------------
+  # Forced Alignment: Qwen3-ForcedAligner-0.6B 
+  # ----------------------------------------------------------------
+  - name: qwen3-forced-aligner
+    env_name: test-qwen3-forced-aligner
+    
+    # Environment File
+    env_file: "https://raw.githubusercontent.com/cj-mills/cjm-transcription-plugin-qwen3-forced-aligner/main/environment.yml"
+    
+    # The Plugin Package
+    package: "git+https://github.com/cj-mills/cjm-transcription-plugin-qwen3-forced-aligner.git"
+    
+    # Interface Libraries
+    interface_libs:
+      - "git+https://github.com/cj-mills/cjm-plugin-system.git"
+      - "git+https://github.com/cj-mills/cjm-transcription-plugin-system.git"
