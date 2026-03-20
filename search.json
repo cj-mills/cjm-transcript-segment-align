@@ -1,0 +1,413 @@
+[
+  {
+    "objectID": "routes/forced_alignment.html#ui-rendering-functions",
+    "href": "routes/forced_alignment.html#ui-rendering-functions",
+    "title": "forced_alignment",
+    "section": "UI Rendering Functions",
+    "text": "UI Rendering Functions\n\nsource\n\nrender_fa_trigger_button\n\ndef render_fa_trigger_button(\n    trigger_url:str, # URL for forced alignment trigger route\n    disabled:bool=False, # Whether button is disabled\n)-&gt;Any: # Force Align trigger button\n\nRender the Force Align trigger button.\n\nsource\n\n\nrender_fa_progress\n\ndef render_fa_progress(\n    progress_val:float, # Progress value 0.0-1.0\n    message:str, # Progress stage message\n    progress_url:str, # URL for progress polling\n)-&gt;Any: # Progress indicator with polling\n\nRender forced alignment progress indicator with HTMX polling.\n\nsource\n\n\nrender_fa_toggle\n\ndef render_fa_toggle(\n    active_presplit:str, # \"nltk\" or \"forced_alignment\"\n    toggle_url:str, # URL for toggle route\n)-&gt;Any: # Toggle button group\n\nRender the NLTK / Force Aligned toggle button group.\n\nsource\n\n\nrender_fa_controls\n\ndef render_fa_controls(\n    trigger_url:str='', # URL for trigger route\n    toggle_url:str='', # URL for toggle route\n    active_presplit:Optional=None, # Current active mode (None = no FA done yet)\n    fa_available:bool=False, # Whether FA plugin is available\n    oob:bool=False, # Whether to render as OOB swap\n)-&gt;Any: # FA controls container\n\nRender the forced alignment controls container.\nShows either: - Trigger button (if FA not yet run) - Toggle (if FA has been run) - Nothing (if FA plugin not available)",
+    "crumbs": [
+      "routes",
+      "forced_alignment"
+    ]
+  },
+  {
+    "objectID": "routes/forced_alignment.html#route-handlers",
+    "href": "routes/forced_alignment.html#route-handlers",
+    "title": "forced_alignment",
+    "section": "Route Handlers",
+    "text": "Route Handlers",
+    "crumbs": [
+      "routes",
+      "forced_alignment"
+    ]
+  },
+  {
+    "objectID": "routes/forced_alignment.html#router-assembly",
+    "href": "routes/forced_alignment.html#router-assembly",
+    "title": "forced_alignment",
+    "section": "Router Assembly",
+    "text": "Router Assembly\n\nsource\n\ninit_forced_alignment_routers\n\ndef init_forced_alignment_routers(\n    state_store:SQLiteWorkflowStateStore, # State store instance\n    workflow_id:str, # Workflow identifier\n    fa_service:ForcedAlignmentService, # Forced alignment service\n    source_service:SourceService, # Source service for audio paths/text\n    seg_urls:SegmentationUrls, # Segmentation URL bundle\n    prefix:str, # Route prefix (e.g., \"/fa\")\n)-&gt;Tuple: # (router, route_dict)\n\nInitialize forced alignment routes.",
+    "crumbs": [
+      "routes",
+      "forced_alignment"
+    ]
+  },
+  {
+    "objectID": "services/forced_alignment.html",
+    "href": "services/forced_alignment.html",
+    "title": "forced_alignment",
+    "section": "",
+    "text": "The forced alignment model strips punctuation from words. We need to map each stripped word back to its position in the original text to preserve punctuation.\nExample:\nOriginal text:  \"November the 10th, Wednesday, 9 p.m.\"\nFA words:       [\"November\", \"the\", \"10th\", \"Wednesday\", \"9\", \"pm\"]\nMapped:         [(0, 8), (9, 12), (13, 18), (19, 29), (30, 31), (32, 36)]\n                → char spans into original text\nThe approach: for each FA word, find where it matches in the remaining original text (stripping punctuation from the original for comparison), then record the full span including any trailing punctuation.\n\nsource\n\n\n\ndef map_fa_words_to_text(\n    text:str, # Original text with punctuation\n    fa_items:List, # FA word-level alignment results\n)-&gt;List: # List of (start_char, end_char) spans into original text\n\nMap forced alignment words back to character spans in the original text.\nWalks through the original text, matching each FA word (punctuation-stripped) against original text tokens. Returns character offset pairs for each FA word.",
+    "crumbs": [
+      "services",
+      "forced_alignment"
+    ]
+  },
+  {
+    "objectID": "services/forced_alignment.html#word-to-text-mapping",
+    "href": "services/forced_alignment.html#word-to-text-mapping",
+    "title": "forced_alignment",
+    "section": "",
+    "text": "The forced alignment model strips punctuation from words. We need to map each stripped word back to its position in the original text to preserve punctuation.\nExample:\nOriginal text:  \"November the 10th, Wednesday, 9 p.m.\"\nFA words:       [\"November\", \"the\", \"10th\", \"Wednesday\", \"9\", \"pm\"]\nMapped:         [(0, 8), (9, 12), (13, 18), (19, 29), (30, 31), (32, 36)]\n                → char spans into original text\nThe approach: for each FA word, find where it matches in the remaining original text (stripping punctuation from the original for comparison), then record the full span including any trailing punctuation.\n\nsource\n\n\n\ndef map_fa_words_to_text(\n    text:str, # Original text with punctuation\n    fa_items:List, # FA word-level alignment results\n)-&gt;List: # List of (start_char, end_char) spans into original text\n\nMap forced alignment words back to character spans in the original text.\nWalks through the original text, matching each FA word (punctuation-stripped) against original text tokens. Returns character offset pairs for each FA word.",
+    "crumbs": [
+      "services",
+      "forced_alignment"
+    ]
+  },
+  {
+    "objectID": "services/forced_alignment.html#word-to-vad-chunk-assignment",
+    "href": "services/forced_alignment.html#word-to-vad-chunk-assignment",
+    "title": "forced_alignment",
+    "section": "Word-to-VAD-Chunk Assignment",
+    "text": "Word-to-VAD-Chunk Assignment\nEach FA word has a start_time. We assign it to the VAD chunk whose time range contains that timestamp. For words in silence gaps between chunks, we assign to the nearest chunk by time proximity.\n\nsource\n\nassign_words_to_chunks\n\ndef assign_words_to_chunks(\n    fa_items:List, # FA word-level alignment results\n    vad_chunks:List, # VAD chunks with start/end times\n)-&gt;List: # Chunk index for each FA word\n\nAssign each FA word to a VAD chunk based on timestamp overlap.\nWords whose start_time falls within a chunk’s [start, end] range are assigned to that chunk. Words in silence gaps are assigned to the nearest chunk by time proximity.",
+    "crumbs": [
+      "services",
+      "forced_alignment"
+    ]
+  },
+  {
+    "objectID": "services/forced_alignment.html#build-textsegments-from-assignments",
+    "href": "services/forced_alignment.html#build-textsegments-from-assignments",
+    "title": "forced_alignment",
+    "section": "Build TextSegments from Assignments",
+    "text": "Build TextSegments from Assignments\nGroups words by their assigned chunk, joins the original (punctuated) text spans, and creates TextSegment objects with proper character offsets.\n\nsource\n\nbuild_segments_from_alignment\n\ndef build_segments_from_alignment(\n    text:str, # Original text with punctuation\n    spans:List, # Character spans from map_fa_words_to_text\n    assignments:List, # Chunk index per word from assign_words_to_chunks\n    num_chunks:int, # Total number of VAD chunks\n    source_id:Optional=None, # Source block ID for traceability\n    source_provider_id:Optional=None, # Source provider identifier\n)-&gt;List: # One segment per VAD chunk\n\nBuild TextSegment list by grouping words by their assigned VAD chunk.\nEach VAD chunk gets one TextSegment whose text is the joined original (punctuated) words assigned to that chunk.",
+    "crumbs": [
+      "services",
+      "forced_alignment"
+    ]
+  },
+  {
+    "objectID": "services/forced_alignment.html#forcedalignmentservice",
+    "href": "services/forced_alignment.html#forcedalignmentservice",
+    "title": "forced_alignment",
+    "section": "ForcedAlignmentService",
+    "text": "ForcedAlignmentService\nWraps the forced alignment plugin to produce List[TextSegment] — the same output type as SegmentationService.split_sentences_async(), so the downstream UI flow is identical.\n\nsource\n\nForcedAlignmentService\n\ndef ForcedAlignmentService(\n    plugin_manager:PluginManager, # Plugin manager for accessing forced alignment plugin\n    plugin_name:str='cjm-transcription-plugin-qwen3-forced-aligner', # Name of the FA plugin\n):\n\nService for audio-informed text pre-splitting via forced alignment plugin.",
+    "crumbs": [
+      "services",
+      "forced_alignment"
+    ]
+  },
+  {
+    "objectID": "services/forced_alignment.html#tests",
+    "href": "services/forced_alignment.html#tests",
+    "title": "forced_alignment",
+    "section": "Tests",
+    "text": "Tests\n\nWord-to-Text Mapping\n\n# Test _strip_punct\nassert _strip_punct(\"hello\") == \"hello\"\nassert _strip_punct(\"hello,\") == \"hello\"\nassert _strip_punct(\"10th,\") == \"10th\"\nassert _strip_punct(\"p.m.\") == \"pm\"\nassert _strip_punct(\"I'm\") == \"Im\"\nassert _strip_punct('\"Hello\"') == \"Hello\"\nprint(\"_strip_punct tests passed\")\n\n_strip_punct tests passed\n\n\n\n# Test basic word-to-text mapping\ntext = \"November the 10th, Wednesday, 9 p.m.\"\nfa_items = [\n    ForcedAlignItem(text=\"November\", start_time=1.04, end_time=1.6),\n    ForcedAlignItem(text=\"the\", start_time=1.6, end_time=1.68),\n    ForcedAlignItem(text=\"10th\", start_time=1.76, end_time=2.08),\n    ForcedAlignItem(text=\"Wednesday\", start_time=2.48, end_time=3.04),\n    ForcedAlignItem(text=\"9\", start_time=3.84, end_time=4.16),\n    ForcedAlignItem(text=\"pm\", start_time=4.16, end_time=4.64),\n]\n\nspans = map_fa_words_to_text(text, fa_items)\nprint(f\"Spans: {spans}\")\nfor span, item in zip(spans, fa_items):\n    print(f\"  FA '{item.text}' → original '{text[span[0]:span[1]]}'\")\n\n# Verify punctuation preserved\nassert text[spans[2][0]:spans[2][1]] == \"10th,\"  # trailing comma\nassert text[spans[3][0]:spans[3][1]] == \"Wednesday,\"  # trailing comma\nassert text[spans[5][0]:spans[5][1]] == \"p.m.\"  # multi-char punctuation mapped to \"pm\"\nprint(\"Basic mapping tests passed\")\n\nSpans: [(0, 8), (9, 12), (13, 18), (19, 29), (30, 31), (32, 36)]\n  FA 'November' → original 'November'\n  FA 'the' → original 'the'\n  FA '10th' → original '10th,'\n  FA 'Wednesday' → original 'Wednesday,'\n  FA '9' → original '9'\n  FA 'pm' → original 'p.m.'\nBasic mapping tests passed\n\n\n\n# Test with contractions\ntext2 = \"I'm standing in a dark alley.\"\nfa_items2 = [\n    ForcedAlignItem(text=\"Im\", start_time=0.0, end_time=0.2),\n    ForcedAlignItem(text=\"standing\", start_time=0.2, end_time=0.5),\n    ForcedAlignItem(text=\"in\", start_time=0.5, end_time=0.6),\n    ForcedAlignItem(text=\"a\", start_time=0.6, end_time=0.7),\n    ForcedAlignItem(text=\"dark\", start_time=0.7, end_time=0.9),\n    ForcedAlignItem(text=\"alley\", start_time=0.9, end_time=1.2),\n]\n\nspans2 = map_fa_words_to_text(text2, fa_items2)\nfor span, item in zip(spans2, fa_items2):\n    print(f\"  FA '{item.text}' → original '{text2[span[0]:span[1]]}'\")\n\nassert text2[spans2[0][0]:spans2[0][1]] == \"I'm\"  # contraction preserved\nassert text2[spans2[5][0]:spans2[5][1]] == \"alley.\"  # trailing period\nprint(\"Contraction mapping tests passed\")\n\n  FA 'Im' → original 'I'm'\n  FA 'standing' → original 'standing'\n  FA 'in' → original 'in'\n  FA 'a' → original 'a'\n  FA 'dark' → original 'dark'\n  FA 'alley' → original 'alley.'\nContraction mapping tests passed\n\n\n\n\nWord-to-VAD-Chunk Assignment\n\n# Test basic chunk assignment (using realistic VAD data with gaps)\nchunks = [\n    VADChunk(index=0, start_time=1.1, end_time=2.4),\n    VADChunk(index=1, start_time=2.5, end_time=3.2),\n    VADChunk(index=2, start_time=3.8, end_time=4.7),\n]\n\n# Words with timestamps from forced alignment\nitems = [\n    ForcedAlignItem(text=\"November\", start_time=1.04, end_time=1.6),   # gap before chunk 0 → nearest chunk 0\n    ForcedAlignItem(text=\"the\", start_time=1.6, end_time=1.68),        # chunk 0\n    ForcedAlignItem(text=\"10th\", start_time=1.76, end_time=2.08),      # chunk 0\n    ForcedAlignItem(text=\"Wednesday\", start_time=2.48, end_time=3.04), # gap [2.4,2.5] → nearest chunk 1\n    ForcedAlignItem(text=\"9\", start_time=3.84, end_time=4.16),        # chunk 2\n    ForcedAlignItem(text=\"pm\", start_time=4.16, end_time=4.64),       # chunk 2\n]\n\nassignments = assign_words_to_chunks(items, chunks)\nprint(f\"Assignments: {assignments}\")\nassert assignments == [0, 0, 0, 1, 2, 2]\nprint(\"Basic chunk assignment tests passed\")\n\nAssignments: [0, 0, 0, 1, 2, 2]\nBasic chunk assignment tests passed\n\n\n\n# Test word in silence gap (between chunks)\ngap_chunks = [\n    VADChunk(index=0, start_time=1.0, end_time=2.0),\n    VADChunk(index=1, start_time=4.0, end_time=5.0),\n]\n\ngap_items = [\n    ForcedAlignItem(text=\"word1\", start_time=1.5, end_time=1.8),   # chunk 0\n    ForcedAlignItem(text=\"word2\", start_time=2.5, end_time=3.0),   # gap → nearest is chunk 0 (dist 0.5 vs 1.0)\n    ForcedAlignItem(text=\"word3\", start_time=3.5, end_time=3.8),   # gap → nearest is chunk 1 (dist 0.5 vs 1.5)\n    ForcedAlignItem(text=\"word4\", start_time=4.5, end_time=4.8),   # chunk 1\n]\n\ngap_assignments = assign_words_to_chunks(gap_items, gap_chunks)\nprint(f\"Gap assignments: {gap_assignments}\")\nassert gap_assignments == [0, 0, 1, 1]\nprint(\"Gap assignment tests passed\")\n\nGap assignments: [0, 0, 1, 1]\nGap assignment tests passed\n\n\n\n\nBuild Segments from Alignment\n\n# Test full pipeline: map → assign → build\nfull_text = \"November the 10th, Wednesday, 9 p.m.\"\nfull_items = [\n    ForcedAlignItem(text=\"November\", start_time=1.04, end_time=1.6),\n    ForcedAlignItem(text=\"the\", start_time=1.6, end_time=1.68),\n    ForcedAlignItem(text=\"10th\", start_time=1.76, end_time=2.08),\n    ForcedAlignItem(text=\"Wednesday\", start_time=2.48, end_time=3.04),\n    ForcedAlignItem(text=\"9\", start_time=3.84, end_time=4.16),\n    ForcedAlignItem(text=\"pm\", start_time=4.16, end_time=4.64),\n]\nfull_chunks = [\n    VADChunk(index=0, start_time=1.1, end_time=2.4),\n    VADChunk(index=1, start_time=2.5, end_time=3.2),\n    VADChunk(index=2, start_time=3.8, end_time=4.7),\n]\n\nfull_spans = map_fa_words_to_text(full_text, full_items)\nfull_assignments = assign_words_to_chunks(full_items, full_chunks)\nsegments = build_segments_from_alignment(\n    full_text, full_spans, full_assignments, len(full_chunks),\n    source_id=\"test-source\", source_provider_id=\"test-provider\"\n)\n\nprint(f\"Built {len(segments)} segments:\")\nfor seg in segments:\n    print(f\"  [{seg.index}] '{seg.text}' (chars {seg.start_char}-{seg.end_char})\")\n\nassert len(segments) == 3\nassert segments[0].text == \"November the 10th,\"\nassert segments[1].text == \"Wednesday,\"\nassert segments[2].text == \"9 p.m.\"\nassert segments[0].source_id == \"test-source\"\nassert segments[0].source_provider_id == \"test-provider\"\nassert segments[0].index == 0\nassert segments[1].index == 1\nassert segments[2].index == 2\nprint(\"Build segments tests passed\")\n\nBuilt 3 segments:\n  [0] 'November the 10th,' (chars 0-18)\n  [1] 'Wednesday,' (chars 19-29)\n  [2] '9 p.m.' (chars 30-36)\nBuild segments tests passed\n\n\n\n# Test with a VAD chunk that has no assigned words\nsparse_chunks = [\n    VADChunk(index=0, start_time=1.0, end_time=2.0),\n    VADChunk(index=1, start_time=5.0, end_time=6.0),  # No words fall here\n    VADChunk(index=2, start_time=10.0, end_time=11.0),\n]\nsparse_items = [\n    ForcedAlignItem(text=\"hello\", start_time=1.5, end_time=1.8),\n    ForcedAlignItem(text=\"world\", start_time=10.5, end_time=10.8),\n]\nsparse_text = \"hello world\"\n\nsparse_spans = map_fa_words_to_text(sparse_text, sparse_items)\nsparse_assign = assign_words_to_chunks(sparse_items, sparse_chunks)\nsparse_segments = build_segments_from_alignment(\n    sparse_text, sparse_spans, sparse_assign, len(sparse_chunks)\n)\n\nassert len(sparse_segments) == 3\nassert sparse_segments[0].text == \"hello\"\nassert sparse_segments[1].text == \"\"  # Empty segment for chunk with no words\nassert sparse_segments[2].text == \"world\"\nprint(f\"Sparse segments: {[(s.index, s.text) for s in sparse_segments]}\")\nprint(\"Empty chunk segment tests passed\")\n\nSparse segments: [(0, 'hello'), (1, ''), (2, 'world')]\nEmpty chunk segment tests passed\n\n\n\n\nForcedAlignmentService with Qwen3 Plugin\nThese tests require the Qwen3 forced alignment plugin to be installed and discoverable. VAD chunks are loaded from pre-generated JSON files in test_files/.\n\n# Set up plugin manager and load the Qwen3 forced alignment plugin\nimport json\nfrom pathlib import Path\nfrom cjm_plugin_system.core.manager import PluginManager\n\n# Calculate project root from notebook location (nbs/services/ -&gt; project root)\nproject_root = Path.cwd().parent.parent\ntest_files = project_root / \"test_files\"\nmanifests_dir = project_root / \".cjm\" / \"manifests\"\n\n# Create plugin manager with explicit search path\nmanager = PluginManager(search_paths=[manifests_dir])\nmanager.discover_manifests()\n\nprint(f\"Discovered {len(manager.discovered)} plugins from {manifests_dir}\")\n\n# Check if Qwen3 forced alignment plugin is available\nfa_plugin_name = \"cjm-transcription-plugin-qwen3-forced-aligner\"\nfa_meta = manager.get_discovered_meta(fa_plugin_name)\nif fa_meta:\n    print(f\"Found plugin: {fa_meta.name} v{fa_meta.version}\")\n    manager.load_plugin(fa_meta, {\"language\": \"English\"})\n    print(f\"  {fa_plugin_name}: loaded\")\nelse:\n    print(f\"  {fa_plugin_name}: not found - install via plugins_test.yaml\")\n\n[PluginManager] Discovered manifest: cjm-media-plugin-silero-vad from /mnt/SN850X_8TB_EXT4/Projects/GitHub/cj-mills/cjm-transcript-segment-align/.cjm/manifests/cjm-media-plugin-silero-vad.json\n[PluginManager] Discovered manifest: cjm-text-plugin-nltk from /mnt/SN850X_8TB_EXT4/Projects/GitHub/cj-mills/cjm-transcript-segment-align/.cjm/manifests/cjm-text-plugin-nltk.json\n[PluginManager] Discovered manifest: cjm-transcription-plugin-qwen3-forced-aligner from /mnt/SN850X_8TB_EXT4/Projects/GitHub/cj-mills/cjm-transcript-segment-align/.cjm/manifests/cjm-transcription-plugin-qwen3-forced-aligner.json\n[PluginManager] Launching worker for cjm-transcription-plugin-qwen3-forced-aligner...\n\n\nDiscovered 3 plugins from /mnt/SN850X_8TB_EXT4/Projects/GitHub/cj-mills/cjm-transcript-segment-align/.cjm/manifests\nFound plugin: cjm-transcription-plugin-qwen3-forced-aligner v0.0.1\n[cjm-transcription-plugin-qwen3-forced-aligner] Starting worker on port 41997...\n[cjm-transcription-plugin-qwen3-forced-aligner] Logs: /home/innom-dt/.cjm/logs/cjm-transcription-plugin-qwen3-forced-aligner.log\n\n\n[PluginManager] HTTP Request: GET http://127.0.0.1:41997/health \"HTTP/1.1 200 OK\"\n[PluginManager] HTTP Request: POST http://127.0.0.1:41997/initialize \"HTTP/1.1 200 OK\"\n[PluginManager] Loaded plugin: cjm-transcription-plugin-qwen3-forced-aligner\n\n\n[cjm-transcription-plugin-qwen3-forced-aligner] Worker ready.\n  cjm-transcription-plugin-qwen3-forced-aligner: loaded\n\n\n\n# Test with short audio file\nif fa_meta and manager.get_plugin(fa_plugin_name):\n    # Load VAD chunks from pre-generated JSON\n    with open(test_files / \"short_test_audio_vad.json\") as f:\n        vad_data = json.load(f)\n    vad_chunks = [VADChunk(**c) for c in vad_data]\n\n    # Load transcript text\n    text = (test_files / \"short_test_audio.txt\").read_text().strip()\n    audio_path = str(test_files / \"short_test_audio.mp3\")\n\n    print(f\"Audio: short_test_audio.mp3\")\n    print(f\"Text: {text[:60]}...\")\n    print(f\"VAD chunks: {len(vad_chunks)}\")\n\n    # Create service and run alignment\n    fa_service = ForcedAlignmentService(manager, fa_plugin_name)\n\n    segments = await fa_service.align_and_split_async(\n        audio_path=audio_path,\n        text=text,\n        vad_chunks=vad_chunks,\n        source_id=\"test-short\",\n        source_provider_id=\"test\",\n    )\n\n    print(f\"\\nResult: {len(segments)} segments (from {len(vad_chunks)} VAD chunks)\")\n    assert len(segments) == len(vad_chunks), f\"Expected {len(vad_chunks)} segments, got {len(segments)}\"\n\n    for seg in segments:\n        print(f\"  [{seg.index}] '{seg.text[:50]}{'...' if len(seg.text) &gt; 50 else ''}'\")\n\n    # Verify all text is accounted for (no words lost)\n    all_text = \" \".join(seg.text for seg in segments if seg.text)\n    print(f\"\\nReconstructed text length: {len(all_text)} chars\")\n    print(f\"Original text length: {len(text)} chars\")\n\nAudio: short_test_audio.mp3\nText: November the 10th, Wednesday, 9 p.m. I'm standing in a dark ...\nVAD chunks: 11\n\n\n[PluginManager] HTTP Request: POST http://127.0.0.1:41997/execute \"HTTP/1.1 200 OK\"\n\n\n\nResult: 11 segments (from 11 VAD chunks)\n  [0] 'November the 10th,'\n  [1] 'Wednesday,'\n  [2] '9 p.m.'\n  [3] 'I'm standing in a dark alley.'\n  [4] 'After waiting several hours,'\n  [5] 'the time has come.'\n  [6] 'A woman with long dark hair approaches.'\n  [7] 'I have to act'\n  [8] 'and fast'\n  [9] 'before she realises what has happened.'\n  [10] 'I must find out.'\n\nReconstructed text length: 233 chars\nOriginal text length: 233 chars\n\n\n\n# Test with longer audio file (Laying Plans ~4 min, 89 VAD chunks)\nif fa_meta and manager.get_plugin(fa_plugin_name):\n    with open(test_files / \"02 - 1. Laying Plans_vad.json\") as f:\n        vad_data_long = json.load(f)\n    vad_chunks_long = [VADChunk(**c) for c in vad_data_long]\n\n    text_long = (test_files / \"02 - 1. Laying Plans.txt\").read_text().strip()\n    audio_path_long = str(test_files / \"02 - 1. Laying Plans.mp3\")\n\n    print(f\"Audio: 02 - 1. Laying Plans.mp3\")\n    print(f\"Text: {len(text_long)} chars, {len(text_long.split())} words\")\n    print(f\"VAD chunks: {len(vad_chunks_long)}\")\n\n    segments_long = await fa_service.align_and_split_async(\n        audio_path=audio_path_long,\n        text=text_long,\n        vad_chunks=vad_chunks_long,\n        source_id=\"test-long\",\n        source_provider_id=\"test\",\n    )\n\n    print(f\"\\nResult: {len(segments_long)} segments (from {len(vad_chunks_long)} VAD chunks)\")\n    assert len(segments_long) == len(vad_chunks_long)\n\n    # Show first and last few segments\n    print(\"\\nFirst 5 segments:\")\n    for seg in segments_long[:5]:\n        print(f\"  [{seg.index}] '{seg.text[:60]}{'...' if len(seg.text) &gt; 60 else ''}'\")\n    print(f\"\\nLast 5 segments:\")\n    for seg in segments_long[-5:]:\n        print(f\"  [{seg.index}] '{seg.text[:60]}{'...' if len(seg.text) &gt; 60 else ''}'\")\n\n    # Check for empty segments\n    empty_count = sum(1 for s in segments_long if not s.text)\n    print(f\"\\nEmpty segments: {empty_count}\")\n    non_empty_text = \" \".join(s.text for s in segments_long if s.text)\n    print(f\"Reconstructed text: {len(non_empty_text)} chars (original: {len(text_long)} chars)\")\n\nAudio: 02 - 1. Laying Plans.mp3\nText: 3405 chars, 599 words\nVAD chunks: 89\n\n\n[PluginManager] HTTP Request: POST http://127.0.0.1:41997/execute \"HTTP/1.1 200 OK\"\n\n\n\nResult: 89 segments (from 89 VAD chunks)\n\nFirst 5 segments:\n  [0] 'Laying Plans'\n  [1] 'Sun Tzu said,'\n  [2] 'The art of war is of vital importance to the state.'\n  [3] 'It is a matter of life and death,'\n  [4] 'a road either to safety or to ruin.'\n\nLast 5 segments:\n  [84] 'Thus do many calculations lead to victory'\n  [85] 'and few calculations to defeat.'\n  [86] 'How much more no calculation at all? It'\n  [87] 'is by attention to this point that I can foresee who is like...'\n  [88] 'or lose.'\n\nEmpty segments: 0\nReconstructed text: 3405 chars (original: 3405 chars)\n\n\n\n# Cleanup\nif fa_meta:\n    manager.unload_all()\n    print(\"Plugins unloaded\")\n\n[PluginManager] HTTP Request: POST http://127.0.0.1:41997/cleanup \"HTTP/1.1 200 OK\"\n[PluginManager] Unloaded plugin: cjm-transcription-plugin-qwen3-forced-aligner\n\n\nPlugins unloaded",
+    "crumbs": [
+      "services",
+      "forced_alignment"
+    ]
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "cjm-transcript-segment-align",
+    "section": "",
+    "text": "pip install cjm_transcript_segment_align",
+    "crumbs": [
+      "cjm-transcript-segment-align"
+    ]
+  },
+  {
+    "objectID": "index.html#install",
+    "href": "index.html#install",
+    "title": "cjm-transcript-segment-align",
+    "section": "",
+    "text": "pip install cjm_transcript_segment_align",
+    "crumbs": [
+      "cjm-transcript-segment-align"
+    ]
+  },
+  {
+    "objectID": "index.html#project-structure",
+    "href": "index.html#project-structure",
+    "title": "cjm-transcript-segment-align",
+    "section": "Project Structure",
+    "text": "Project Structure\nnbs/\n├── components/ (4)\n│   ├── handlers.ipynb         # Handler wrappers for cross-domain coordination (alignment status updates)\n│   ├── helpers.ipynb          # State extraction helpers for cross-domain coordination in Phase 2 combined step\n│   ├── keyboard_config.ipynb  # Shared keyboard navigation configuration for the combined Phase 2 step\n│   └── step_renderer.ipynb    # Phase 2 combined step renderer: dual-column layout for Segment & Align\n├── routes/ (2)\n│   ├── chrome.ipynb            # Shared chrome switching route handlers for the combined Phase 2 step\n│   └── forced_alignment.ipynb  # Routes for triggering forced alignment, polling progress, and toggling between NLTK and force-aligned pre-splits\n├── services/ (1)\n│   └── forced_alignment.ipynb  # Forced alignment service for audio-informed text pre-splitting via forced alignment plugin\n└── html_ids.ipynb  # HTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome\nTotal: 8 notebooks across 3 directories",
+    "crumbs": [
+      "cjm-transcript-segment-align"
+    ]
+  },
+  {
+    "objectID": "index.html#module-dependencies",
+    "href": "index.html#module-dependencies",
+    "title": "cjm-transcript-segment-align",
+    "section": "Module Dependencies",
+    "text": "Module Dependencies\ngraph LR\n    components_handlers[components.handlers&lt;br/&gt;handlers]\n    components_helpers[components.helpers&lt;br/&gt;helpers]\n    components_keyboard_config[components.keyboard_config&lt;br/&gt;keyboard_config]\n    components_step_renderer[components.step_renderer&lt;br/&gt;step_combined]\n    html_ids[html_ids&lt;br/&gt;html_ids]\n    routes_chrome[routes.chrome&lt;br/&gt;chrome]\n    routes_forced_alignment[routes.forced_alignment&lt;br/&gt;forced_alignment]\n    services_forced_alignment[services.forced_alignment&lt;br/&gt;forced_alignment]\n\n    components_handlers --&gt; components_keyboard_config\n    components_handlers --&gt; html_ids\n    components_handlers --&gt; components_step_renderer\n    components_keyboard_config --&gt; html_ids\n    components_step_renderer --&gt; components_helpers\n    components_step_renderer --&gt; components_keyboard_config\n    components_step_renderer --&gt; html_ids\n    routes_chrome --&gt; html_ids\n    routes_chrome --&gt; components_keyboard_config\n    routes_chrome --&gt; components_step_renderer\n    routes_forced_alignment --&gt; html_ids\n    routes_forced_alignment --&gt; components_step_renderer\n    routes_forced_alignment --&gt; services_forced_alignment\n13 cross-module dependencies detected",
+    "crumbs": [
+      "cjm-transcript-segment-align"
+    ]
+  },
+  {
+    "objectID": "index.html#cli-reference",
+    "href": "index.html#cli-reference",
+    "title": "cjm-transcript-segment-align",
+    "section": "CLI Reference",
+    "text": "CLI Reference\nNo CLI commands found in this project.",
+    "crumbs": [
+      "cjm-transcript-segment-align"
+    ]
+  },
+  {
+    "objectID": "index.html#module-overview",
+    "href": "index.html#module-overview",
+    "title": "cjm-transcript-segment-align",
+    "section": "Module Overview",
+    "text": "Module Overview\nDetailed documentation for each module in the project:\n\nchrome (chrome.ipynb)\n\nShared chrome switching route handlers for the combined Phase 2 step\n\n\nImport\nfrom cjm_transcript_segment_align.routes.chrome import (\n    DEBUG_SWITCH_CHROME,\n    init_chrome_router\n)\n\n\nFunctions\nasync def _handle_switch_chrome(\n    state_store:SQLiteWorkflowStateStore,  # State store instance\n    workflow_id:str,  # Workflow identifier\n    request,  # FastHTML request object\n    sess,  # FastHTML session object\n    seg_urls:SegmentationUrls,  # URL bundle for segmentation routes\n    align_urls:AlignmentUrls,  # URL bundle for alignment routes\n) -&gt; tuple:  # OOB swaps for shared chrome containers\n    \"Switch shared chrome content based on active column.\"\ndef init_chrome_router(\n    state_store: SQLiteWorkflowStateStore,  # State store instance\n    workflow_id: str,  # Workflow identifier\n    seg_urls: SegmentationUrls,  # URL bundle for segmentation routes\n    align_urls: AlignmentUrls,  # URL bundle for alignment routes\n    prefix: str,  # Route prefix (e.g., \"/workflow/core/chrome\")\n) -&gt; Tuple[APIRouter, Dict[str, Callable]]:  # (router, route_dict)\n    \"Initialize chrome switching routes.\"\n\n\nVariables\nDEBUG_SWITCH_CHROME = False\n\n\n\nforced_alignment (forced_alignment.ipynb)\n\nRoutes for triggering forced alignment, polling progress, and toggling between NLTK and force-aligned pre-splits\n\n\nImport\nfrom cjm_transcript_segment_align.routes.forced_alignment import (\n    FA_CONTAINER_ID,\n    FA_STATUS_ID,\n    render_fa_trigger_button,\n    render_fa_progress,\n    render_fa_toggle,\n    render_fa_controls,\n    init_forced_alignment_routers\n)\n\n\nFunctions\ndef render_fa_trigger_button(\n    trigger_url: str,  # URL for forced alignment trigger route\n    disabled: bool = False,  # Whether button is disabled\n) -&gt; Any:  # Force Align trigger button\n    \"Render the Force Align trigger button.\"\ndef render_fa_progress(\n    progress_val: float,  # Progress value 0.0-1.0\n    message: str,  # Progress stage message\n    progress_url: str,  # URL for progress polling\n) -&gt; Any:  # Progress indicator with polling\n    \"Render forced alignment progress indicator with HTMX polling.\"\ndef render_fa_toggle(\n    active_presplit: str,  # \"nltk\" or \"forced_alignment\"\n    toggle_url: str,  # URL for toggle route\n) -&gt; Any:  # Toggle button group\n    \"Render the NLTK / Force Aligned toggle button group.\"\ndef render_fa_controls(\n    trigger_url: str = \"\",  # URL for trigger route\n    toggle_url: str = \"\",  # URL for toggle route\n    active_presplit: Optional[str] = None,  # Current active mode (None = no FA done yet)\n    fa_available: bool = False,  # Whether FA plugin is available\n    oob: bool = False,  # Whether to render as OOB swap\n) -&gt; Any:  # FA controls container\n    \"\"\"\n    Render the forced alignment controls container.\n    \n    Shows either:\n    - Trigger button (if FA not yet run)\n    - Toggle (if FA has been run)\n    - Nothing (if FA plugin not available)\n    \"\"\"\nasync def _handle_fa_trigger(\n    state_store: SQLiteWorkflowStateStore,\n    workflow_id: str,\n    fa_service: ForcedAlignmentService,\n    source_service: SourceService,\n    request: Any,\n    sess: Any,\n    seg_urls: SegmentationUrls,\n    progress_url: str,\n    toggle_url: str,\n) -&gt; Any:  # OOB updates for card stack, alignment status, FA controls, mini-stats\n    \"Trigger forced alignment and replace working segments.\"\nasync def _handle_fa_toggle(\n    state_store: SQLiteWorkflowStateStore,\n    workflow_id: str,\n    request: Any,\n    sess: Any,\n    seg_urls: SegmentationUrls,\n    toggle_url: str,\n) -&gt; Any:  # OOB updates for card stack, alignment status, FA controls, mini-stats\n    \"Toggle between NLTK and force-aligned pre-splits.\"\ndef init_forced_alignment_routers(\n    state_store: SQLiteWorkflowStateStore,  # State store instance\n    workflow_id: str,  # Workflow identifier\n    fa_service: ForcedAlignmentService,  # Forced alignment service\n    source_service: SourceService,  # Source service for audio paths/text\n    seg_urls: SegmentationUrls,  # Segmentation URL bundle\n    prefix: str,  # Route prefix (e.g., \"/fa\")\n) -&gt; Tuple[APIRouter, Dict[str, Callable]]:  # (router, route_dict)\n    \"Initialize forced alignment routes.\"\n\n\nVariables\nFA_CONTAINER_ID\nFA_STATUS_ID\n\n\n\nforced_alignment (forced_alignment.ipynb)\n\nForced alignment service for audio-informed text pre-splitting via forced alignment plugin\n\n\nImport\nfrom cjm_transcript_segment_align.services.forced_alignment import (\n    map_fa_words_to_text,\n    assign_words_to_chunks,\n    build_segments_from_alignment,\n    ForcedAlignmentService\n)\n\n\nFunctions\ndef _strip_punct(text: str) -&gt; str\n    \"Strip punctuation from text for comparison with FA output.\"\ndef map_fa_words_to_text(\n    text: str,  # Original text with punctuation\n    fa_items: List[ForcedAlignItem],  # FA word-level alignment results\n) -&gt; List[Tuple[int, int]]:  # List of (start_char, end_char) spans into original text\n    \"\"\"\n    Map forced alignment words back to character spans in the original text.\n    \n    Walks through the original text, matching each FA word (punctuation-stripped)\n    against original text tokens. Returns character offset pairs for each FA word.\n    \"\"\"\ndef assign_words_to_chunks(\n    fa_items: List[ForcedAlignItem],  # FA word-level alignment results\n    vad_chunks: List[VADChunk],  # VAD chunks with start/end times\n) -&gt; List[int]:  # Chunk index for each FA word\n    \"\"\"\n    Assign each FA word to a VAD chunk based on timestamp overlap.\n    \n    Words whose start_time falls within a chunk's [start, end] range are\n    assigned to that chunk. Words in silence gaps are assigned to the\n    nearest chunk by time proximity.\n    \"\"\"\ndef build_segments_from_alignment(\n    text: str,  # Original text with punctuation\n    spans: List[Tuple[int, int]],  # Character spans from map_fa_words_to_text\n    assignments: List[int],  # Chunk index per word from assign_words_to_chunks\n    num_chunks: int,  # Total number of VAD chunks\n    source_id: Optional[str] = None,  # Source block ID for traceability\n    source_provider_id: Optional[str] = None,  # Source provider identifier\n) -&gt; List[TextSegment]:  # One segment per VAD chunk\n    \"\"\"\n    Build TextSegment list by grouping words by their assigned VAD chunk.\n    \n    Each VAD chunk gets one TextSegment whose text is the joined original\n    (punctuated) words assigned to that chunk.\n    \"\"\"\n\n\nClasses\nclass ForcedAlignmentService:\n    def __init__(\n        self,\n        plugin_manager: PluginManager,  # Plugin manager for accessing forced alignment plugin\n        plugin_name: str = \"cjm-transcription-plugin-qwen3-forced-aligner\",  # Name of the FA plugin\n    )\n    \"Service for audio-informed text pre-splitting via forced alignment plugin.\"\n    \n    def __init__(\n            self,\n            plugin_manager: PluginManager,  # Plugin manager for accessing forced alignment plugin\n            plugin_name: str = \"cjm-transcription-plugin-qwen3-forced-aligner\",  # Name of the FA plugin\n        )\n        \"Initialize the forced alignment service.\"\n    \n    def is_available(self) -&gt; bool:  # True if plugin is loaded and ready\n            \"\"\"Check if the forced alignment plugin is available.\"\"\"\n            return self._manager.get_plugin(self._plugin_name) is not None\n    \n        def ensure_loaded(\n            self,\n            config: Optional[Dict[str, Any]] = None,  # Optional plugin configuration\n        ) -&gt; bool:  # True if successfully loaded\n        \"Check if the forced alignment plugin is available.\"\n    \n    def ensure_loaded(\n            self,\n            config: Optional[Dict[str, Any]] = None,  # Optional plugin configuration\n        ) -&gt; bool:  # True if successfully loaded\n        \"Ensure the forced alignment plugin is loaded.\"\n    \n    async def align_and_split_async(\n            self,\n            audio_path: str,  # Path to the audio file\n            text: str,  # Original transcript text blob (with punctuation)\n            vad_chunks: List[VADChunk],  # VAD chunks for this audio\n            source_id: Optional[str] = None,  # Source block ID for traceability\n            source_provider_id: Optional[str] = None,  # Source provider identifier\n        ) -&gt; List[TextSegment]:  # One segment per VAD chunk\n        \"Run forced alignment and split text into segments matching VAD chunks.\"\n    \n    def align_and_split(\n            self,\n            audio_path: str,  # Path to the audio file\n            text: str,  # Original transcript text blob\n            vad_chunks: List[VADChunk],  # VAD chunks for this audio\n            source_id: Optional[str] = None,\n            source_provider_id: Optional[str] = None,\n        ) -&gt; List[TextSegment]:  # One segment per VAD chunk\n        \"Run forced alignment and split text synchronously.\"\n    \n    async def align_and_split_combined_async(\n            self,\n            source_blocks: List[Any],  # SourceBlock objects with id, provider_id, text\n            audio_paths: List[str],  # Audio file path per source block\n            vad_chunks_by_source: List[List[VADChunk]],  # VAD chunks per source block\n        ) -&gt; List[TextSegment]:  # Combined segments with global indexing\n        \"Align and split multiple source blocks with their respective audio.\"\n\n\nVariables\n_PUNCT_RE\n\n\n\nhandlers (handlers.ipynb)\n\nHandler wrappers for cross-domain coordination (alignment status updates)\n\n\nImport\nfrom cjm_transcript_segment_align.components.handlers import (\n    wrapped_seg_split,\n    wrapped_seg_merge,\n    wrapped_seg_undo,\n    wrapped_seg_reset,\n    wrapped_seg_ai_split,\n    wrap_seg_mutation_handler,\n    wrap_align_mutation_handler,\n    create_seg_init_chrome_wrapper,\n    create_align_init_chrome_wrapper\n)\n\n\nFunctions\ndef _find_session_id(args, kwargs):\n    \"\"\"Find session_id from args or kwargs.\"\"\"\n    # First check kwargs\n    if 'sess' in kwargs\n    \"Find session_id from args or kwargs.\"\ndef wrap_seg_mutation_handler(\n    handler: Callable,  # Handler function to wrap\n) -&gt; Callable:  # Wrapped handler that appends alignment status OOB\n    \"\"\"\n    Wrap a segmentation mutation handler to add alignment status OOB.\n    \n    The handler is expected to take (state_store, workflow_id, ...) as first params.\n    \"\"\"\ndef wrap_align_mutation_handler(\n    handler: Callable,  # Handler function to wrap\n) -&gt; Callable:  # Wrapped handler that appends alignment status OOB\n    \"\"\"\n    Wrap an alignment mutation handler to add alignment status OOB.\n    \n    The handler is expected to take (state_store, workflow_id, ...) as first params.\n    \"\"\"\ndef create_seg_init_chrome_wrapper(\n    align_urls:AlignmentUrls,  # URL bundle for alignment routes (for KB system)\n    switch_chrome_url:str,  # URL for chrome switching (for KB system)\n    fa_trigger_url:str=\"\",  # URL for forced alignment trigger (optional)\n    fa_toggle_url:str=\"\",  # URL for forced alignment toggle (optional)\n    fa_available:bool=False,  # Whether forced alignment plugin is available\n) -&gt; Callable:  # Wrapped handler that builds KB system and shared chrome\n    \"\"\"\n    Create a wrapper for seg init that builds combined KB system and shared chrome.\n    \n    This is a factory that captures the URLs needed for KB system assembly.\n    Optionally includes forced alignment controls if FA plugin is available.\n    \"\"\"\ndef create_align_init_chrome_wrapper() -&gt; Callable:  # Wrapped handler that adds alignment status\n    \"\"\"Create a wrapper for align init that adds mini-stats and alignment status.\n    \n    Alignment init is simpler than seg init - it doesn't need to build the\n    full KB system (seg init handles that). It just updates alignment-specific\n    chrome and the alignment status badge.\n    \"\"\"\n    async def wrapped_align_init(\n        state_store:WorkflowStateStore,\n        workflow_id:str,\n        source_service:SourceService,\n        alignment_service:AlignmentService,\n        request:Any,\n        sess:Any,\n        urls:AlignmentUrls,\n        visible_count:int=5,\n        card_width:int=40,\n    )\n    \"\"\"\n    Create a wrapper for align init that adds mini-stats and alignment status.\n    \n    Alignment init is simpler than seg init - it doesn't need to build the\n    full KB system (seg init handles that). It just updates alignment-specific\n    chrome and the alignment status badge.\n    \"\"\"\n\n\n\nhelpers (helpers.ipynb)\n\nState extraction helpers for cross-domain coordination in Phase 2 combined step\n\n\nImport\nfrom cjm_transcript_segment_align.components.helpers import (\n    SEG_DEFAULT_VISIBLE_COUNT,\n    SEG_DEFAULT_CARD_WIDTH,\n    ALIGN_DEFAULT_VISIBLE_COUNT,\n    ALIGN_DEFAULT_CARD_WIDTH,\n    check_alignment_ready,\n    extract_seg_state,\n    extract_alignment_state,\n    get_segment_count,\n    get_chunk_count\n)\n\n\nFunctions\ndef check_alignment_ready(\n    segment_count:int,  # Number of text segments\n    chunk_count:int,  # Number of VAD chunks\n) -&gt; bool:  # True if counts match for 1:1 alignment\n    \"Check if segment and VAD chunk counts match for 1:1 alignment.\"\ndef extract_seg_state(\n    ctx:InteractionContext,  # Interaction context with state\n) -&gt; Dict[str, Any]:  # Extracted state values\n    \"Extract segmentation state as explicit values for renderers.\"\ndef extract_alignment_state(\n    ctx:InteractionContext,  # Interaction context with state\n) -&gt; Dict[str, Any]:  # Extracted state values\n    \"Extract alignment state as explicit values for renderers.\"\ndef get_segment_count(\n    ctx:InteractionContext,  # Interaction context with state\n) -&gt; int:  # Number of segments\n    \"Get segment count from state without full extraction.\"\ndef get_chunk_count(\n    ctx:InteractionContext,  # Interaction context with state\n) -&gt; int:  # Number of VAD chunks\n    \"Get VAD chunk count from state without full extraction.\"\n\n\nVariables\nSEG_DEFAULT_VISIBLE_COUNT = 3\nSEG_DEFAULT_CARD_WIDTH = 80\nALIGN_DEFAULT_VISIBLE_COUNT = 5\nALIGN_DEFAULT_CARD_WIDTH = 40\n\n\n\nhtml_ids (html_ids.ipynb)\n\nHTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome\n\n\nImport\nfrom cjm_transcript_segment_align.html_ids import (\n    CombinedHtmlIds\n)\n\n\nClasses\nclass CombinedHtmlIds:\n    \"HTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome.\"\n    \n    def as_selector(\n            id_str:str  # The HTML ID to convert\n        ) -&gt; str:  # CSS selector with # prefix\n        \"Convert an ID to a CSS selector format.\"\n\n\n\nkeyboard_config (keyboard_config.ipynb)\n\nShared keyboard navigation configuration for the combined Phase 2 step\n\n\nImport\nfrom cjm_transcript_segment_align.components.keyboard_config import (\n    DEBUG_KB_SYSTEM,\n    ZONE_CHANGE_CALLBACK,\n    SWITCH_CHROME_BTN_ID,\n    render_keyboard_hints_collapsible,\n    build_combined_kb_system,\n    generate_zone_change_js\n)\n\n\nFunctions\ndef render_keyboard_hints_collapsible(\n    manager:ZoneManager,  # Keyboard zone manager with actions configured\n    container_id:str=\"sd-keyboard-hints\",  # HTML ID for the hints container\n    include_zone_switch:bool=False,  # Whether to include zone switch hints\n) -&gt; Any:  # Collapsible keyboard hints component\n    \"Render keyboard shortcut hints in a collapsible DaisyUI collapse.\"\ndef build_combined_kb_system(\n    seg_urls:SegmentationUrls,  # URL bundle for segmentation routes\n    align_urls:AlignmentUrls,  # URL bundle for alignment routes\n) -&gt; Tuple[ZoneManager, Any]:  # (keyboard manager, rendered keyboard system)\n    \"Build combined keyboard system with segmentation and alignment zones.\"\ndef generate_zone_change_js(\n    switch_chrome_url:str=\"\",  # URL for chrome swap handler (empty = no swap)\n) -&gt; Script:  # Script element with zone change callback and click handlers\n    \"Generate JavaScript for zone change handling and column click handlers.\"\n\n\nVariables\nDEBUG_KB_SYSTEM = True\nZONE_CHANGE_CALLBACK = 'onCombinedZoneChange'\nSWITCH_CHROME_BTN_ID = 'sd-switch-chrome-btn'\n\n\n\nstep_combined (step_renderer.ipynb)\n\nPhase 2 combined step renderer: dual-column layout for Segment & Align\n\n\nImport\nfrom cjm_transcript_segment_align.components.step_renderer import (\n    DEBUG_COMBINED_RENDER,\n    render_seg_mini_stats_badge,\n    render_align_mini_stats_badge,\n    render_alignment_status_text,\n    render_alignment_status,\n    render_footer_inner_content,\n    render_combined_step\n)\n\n\nFunctions\ndef _render_column_header(\n    title:str,  # Column title (e.g., \"Text Decomposition\")\n    stats_id:str,  # HTML ID for the mini-stats badge area\n    header_id:str,  # HTML ID for the column header container\n    initial_text:str=\"--\",  # Initial text for the mini-stats badge\n) -&gt; Any:  # Column header component\n    \"Render a column header with title and mini-stats badge.\"\ndef render_seg_mini_stats_badge(\n    segments:List[TextSegment],  # Current segments\n    oob:bool=False,  # Whether to render as OOB swap\n) -&gt; Any:  # Mini-stats badge Span\n    \"Render the segmentation mini-stats badge for the column header.\"\ndef render_align_mini_stats_badge(\n    chunks:List[VADChunk],  # Current VAD chunks\n    oob:bool=False,  # Whether to render as OOB swap\n) -&gt; Any:  # Mini-stats badge Span\n    \"Render the alignment mini-stats badge for the column header.\"\ndef render_alignment_status_text(\n    segment_count:int,  # Number of text segments\n    chunk_count:int,  # Number of VAD chunks\n) -&gt; str:  # Status message text\n    \"Generate alignment status message based on segment and VAD chunk counts.\"\ndef render_alignment_status(\n    segment_count:int,  # Number of text segments\n    chunk_count:int,  # Number of VAD chunks\n    oob:bool=False,  # Whether to render as OOB swap\n) -&gt; Any:  # Alignment status badge component\n    \"Render the alignment status indicator badge.\"\ndef render_footer_inner_content(\n    column_footer:Any,  # Column-specific footer content (decomp or align)\n    segment_count:int,  # Number of text segments\n    chunk_count:int,  # Number of VAD chunks\n) -&gt; Any:  # Styled wrapper div with column footer and alignment status\n    \"\"\"\n    Render the footer inner content with consistent styling.\n    \n    This ensures the footer layout (justify-between) is preserved across\n    all OOB swaps. Both the column-specific footer content and the\n    alignment status indicator are wrapped in a flex container.\n    \"\"\"\ndef _placeholder(\n    text:str,  # Placeholder message\n) -&gt; Any:  # Styled placeholder paragraph\n    \"Render a placeholder text element for uninitialized chrome containers.\"\ndef _render_shared_chrome(\n    seg_state:dict=None,  # Extracted segmentation state (None = show placeholders)\n    align_state:dict=None,  # Extracted alignment state (None = no VAD data yet)\n    urls:SegmentationUrls=None,  # Segmentation URL bundle (required when seg_state provided)\n    kb_manager:Any=None,  # Keyboard manager (required when seg_state provided)\n) -&gt; tuple:  # (hints, toolbar, controls, footer)\n    \"\"\"\n    Render shared chrome containers, populated with segmentation content when initialized.\n    \n    Takes extracted state dicts from `extract_seg_state()` and `extract_alignment_state()`\n    which contain deserialized TextSegment and VADChunk objects.\n    \"\"\"\ndef _render_seg_column(\n    is_active:bool=True,  # Whether this column is initially active\n    column_body:Any=None,  # Pre-rendered column body (None = not initialized)\n    mini_stats_text:str=\"--\",  # Mini-stats badge text\n    init_url:str=\"\",  # URL for auto-trigger initialization\n) -&gt; Any:  # Left column component\n    \"Render the left segmentation column.\"\ndef _render_alignment_column(\n    is_active:bool=False,  # Whether this column is initially active\n    column_body:Any=None,  # Pre-rendered column body (None = not initialized)\n    mini_stats_text:str=\"--\",  # Mini-stats badge text\n    init_url:str=\"\",  # URL for auto-trigger initialization\n) -&gt; Any:  # Right column component\n    \"Render the right alignment column.\"\ndef _render_keyboard_system_container(\n    kb_system:Any=None,  # Rendered keyboard system (None = empty container)\n    oob:bool=False,  # Whether to render as OOB swap\n) -&gt; Any:  # Div with id=KEYBOARD_SYSTEM containing KB elements\n    \"Render stable container for keyboard navigation system elements.\"\ndef render_combined_step(\n    ctx:InteractionContext,  # Interaction context with state and data\n    seg_urls:SegmentationUrls=None,  # URL bundle for segmentation routes\n    align_urls:AlignmentUrls=None,  # URL bundle for alignment routes\n    switch_chrome_url:str=\"\",  # URL for chrome switching route\n) -&gt; Any:  # FastHTML component with full dual-column layout\n    \"Render Phase 2: Combined Segment & Align step with dual-column layout.\"\n\n\nVariables\nDEBUG_COMBINED_RENDER = True\n_FOOTER_INNER_CLS\n_SEG_COLUMN_CLS\n_ALIGNMENT_COLUMN_CLS",
+    "crumbs": [
+      "cjm-transcript-segment-align"
+    ]
+  },
+  {
+    "objectID": "components/step_renderer.html",
+    "href": "components/step_renderer.html",
+    "title": "step_combined",
+    "section": "",
+    "text": "Each column has a header showing its title and a badge area for compact stats that remain visible regardless of which column is active.",
+    "crumbs": [
+      "components",
+      "step_combined"
+    ]
+  },
+  {
+    "objectID": "components/step_renderer.html#column-headers-with-mini-stats",
+    "href": "components/step_renderer.html#column-headers-with-mini-stats",
+    "title": "step_combined",
+    "section": "",
+    "text": "Each column has a header showing its title and a badge area for compact stats that remain visible regardless of which column is active.",
+    "crumbs": [
+      "components",
+      "step_combined"
+    ]
+  },
+  {
+    "objectID": "components/step_renderer.html#mini-stats-badge-oob",
+    "href": "components/step_renderer.html#mini-stats-badge-oob",
+    "title": "step_combined",
+    "section": "Mini-Stats Badge OOB",
+    "text": "Mini-Stats Badge OOB\nRenders the full decomposition mini-stats badge for OOB swaps from handlers. Matches the badge styling used in _render_column_header.\n\nsource\n\nrender_seg_mini_stats_badge\n\ndef render_seg_mini_stats_badge(\n    segments:List, # Current segments\n    oob:bool=False, # Whether to render as OOB swap\n)-&gt;Any: # Mini-stats badge Span\n\nRender the segmentation mini-stats badge for the column header.\n\nsource\n\n\nrender_align_mini_stats_badge\n\ndef render_align_mini_stats_badge(\n    chunks:List, # Current VAD chunks\n    oob:bool=False, # Whether to render as OOB swap\n)-&gt;Any: # Mini-stats badge Span\n\nRender the alignment mini-stats badge for the column header.",
+    "crumbs": [
+      "components",
+      "step_combined"
+    ]
+  },
+  {
+    "objectID": "components/step_renderer.html#alignment-status-indicator",
+    "href": "components/step_renderer.html#alignment-status-indicator",
+    "title": "step_combined",
+    "section": "Alignment Status Indicator",
+    "text": "Alignment Status Indicator\nShows whether segment count matches VAD chunk count for 1:1 alignment. Displays different states: waiting for data, mismatch with delta, or aligned.\n\nsource\n\nrender_footer_inner_content\n\ndef render_footer_inner_content(\n    column_footer:Any, # Column-specific footer content (decomp or align)\n    segment_count:int, # Number of text segments\n    chunk_count:int, # Number of VAD chunks\n)-&gt;Any: # Styled wrapper div with column footer and alignment status\n\nRender the footer inner content with consistent styling.\nThis ensures the footer layout (justify-between) is preserved across all OOB swaps. Both the column-specific footer content and the alignment status indicator are wrapped in a flex container.\n\nsource\n\n\nrender_alignment_status\n\ndef render_alignment_status(\n    segment_count:int, # Number of text segments\n    chunk_count:int, # Number of VAD chunks\n    oob:bool=False, # Whether to render as OOB swap\n)-&gt;Any: # Alignment status badge component\n\nRender the alignment status indicator badge.\n\nsource\n\n\nrender_alignment_status_text\n\ndef render_alignment_status_text(\n    segment_count:int, # Number of text segments\n    chunk_count:int, # Number of VAD chunks\n)-&gt;str: # Status message text\n\nGenerate alignment status message based on segment and VAD chunk counts.",
+    "crumbs": [
+      "components",
+      "step_combined"
+    ]
+  },
+  {
+    "objectID": "components/step_renderer.html#shared-chrome-containers",
+    "href": "components/step_renderer.html#shared-chrome-containers",
+    "title": "step_combined",
+    "section": "Shared Chrome Containers",
+    "text": "Shared Chrome Containers\nStable-ID containers for keyboard hints, toolbar, controls, and footer. When decomposition is initialized, these are populated with real content. Otherwise, placeholder text is shown. OOB innerHTML swaps update these when focus switches between columns or after init completes.",
+    "crumbs": [
+      "components",
+      "step_combined"
+    ]
+  },
+  {
+    "objectID": "components/step_renderer.html#column-containers",
+    "href": "components/step_renderer.html#column-containers",
+    "title": "step_combined",
+    "section": "Column Containers",
+    "text": "Column Containers\nLeft column (60%, text decomposition) and right column (40%, VAD alignment). Each column has a stable HTML ID, a header with mini-stats, and a content area. When initialized, columns render the card stack viewport. Otherwise they show a loading state with auto-trigger for initialization. Columns stack vertically below the lg breakpoint.",
+    "crumbs": [
+      "components",
+      "step_combined"
+    ]
+  },
+  {
+    "objectID": "components/step_renderer.html#keyboard-system-container",
+    "href": "components/step_renderer.html#keyboard-system-container",
+    "title": "step_combined",
+    "section": "Keyboard System Container",
+    "text": "Keyboard System Container\nStable container for keyboard navigation system (script, hidden inputs, action buttons). This container lives outside both column bodies so it doesn’t get destroyed/recreated when columns are swapped. OOB innerHTML swaps update its content when the combined KB system is built (after both columns are initialized in 4d).",
+    "crumbs": [
+      "components",
+      "step_combined"
+    ]
+  },
+  {
+    "objectID": "components/step_renderer.html#main-combined-step-renderer",
+    "href": "components/step_renderer.html#main-combined-step-renderer",
+    "title": "step_combined",
+    "section": "Main Combined Step Renderer",
+    "text": "Main Combined Step Renderer\nTop-level step renderer for the merged Phase 2. Composes the shared chrome, dual-column layout, and a hidden input tracking the active column.\n\nsource\n\nrender_combined_step\n\ndef render_combined_step(\n    ctx:InteractionContext, # Interaction context with state and data\n    seg_urls:SegmentationUrls=None, # URL bundle for segmentation routes\n    align_urls:AlignmentUrls=None, # URL bundle for alignment routes\n    switch_chrome_url:str='', # URL for chrome switching route\n)-&gt;Any: # FastHTML component with full dual-column layout\n\nRender Phase 2: Combined Segment & Align step with dual-column layout.",
+    "crumbs": [
+      "components",
+      "step_combined"
+    ]
+  },
+  {
+    "objectID": "components/helpers.html",
+    "href": "components/helpers.html",
+    "title": "helpers",
+    "section": "",
+    "text": "source\n\n\n\ndef check_alignment_ready(\n    segment_count:int, # Number of text segments\n    chunk_count:int, # Number of VAD chunks\n)-&gt;bool: # True if counts match for 1:1 alignment\n\nCheck if segment and VAD chunk counts match for 1:1 alignment.",
+    "crumbs": [
+      "components",
+      "helpers"
+    ]
+  },
+  {
+    "objectID": "components/helpers.html#alignment-status-check",
+    "href": "components/helpers.html#alignment-status-check",
+    "title": "helpers",
+    "section": "",
+    "text": "source\n\n\n\ndef check_alignment_ready(\n    segment_count:int, # Number of text segments\n    chunk_count:int, # Number of VAD chunks\n)-&gt;bool: # True if counts match for 1:1 alignment\n\nCheck if segment and VAD chunk counts match for 1:1 alignment.",
+    "crumbs": [
+      "components",
+      "helpers"
+    ]
+  },
+  {
+    "objectID": "components/helpers.html#segmentation-state-extraction",
+    "href": "components/helpers.html#segmentation-state-extraction",
+    "title": "helpers",
+    "section": "Segmentation State Extraction",
+    "text": "Segmentation State Extraction\n\nsource\n\nextract_seg_state\n\ndef extract_seg_state(\n    ctx:InteractionContext, # Interaction context with state\n)-&gt;Dict: # Extracted state values\n\nExtract segmentation state as explicit values for renderers.",
+    "crumbs": [
+      "components",
+      "helpers"
+    ]
+  },
+  {
+    "objectID": "components/helpers.html#alignment-state-extraction",
+    "href": "components/helpers.html#alignment-state-extraction",
+    "title": "helpers",
+    "section": "Alignment State Extraction",
+    "text": "Alignment State Extraction\n\nsource\n\nextract_alignment_state\n\ndef extract_alignment_state(\n    ctx:InteractionContext, # Interaction context with state\n)-&gt;Dict: # Extracted state values\n\nExtract alignment state as explicit values for renderers.",
+    "crumbs": [
+      "components",
+      "helpers"
+    ]
+  },
+  {
+    "objectID": "components/helpers.html#count-helpers",
+    "href": "components/helpers.html#count-helpers",
+    "title": "helpers",
+    "section": "Count Helpers",
+    "text": "Count Helpers\nConvenience functions for getting counts without full state extraction.\n\nsource\n\nget_chunk_count\n\ndef get_chunk_count(\n    ctx:InteractionContext, # Interaction context with state\n)-&gt;int: # Number of VAD chunks\n\nGet VAD chunk count from state without full extraction.\n\nsource\n\n\nget_segment_count\n\ndef get_segment_count(\n    ctx:InteractionContext, # Interaction context with state\n)-&gt;int: # Number of segments\n\nGet segment count from state without full extraction.",
+    "crumbs": [
+      "components",
+      "helpers"
+    ]
+  },
+  {
+    "objectID": "components/handlers.html",
+    "href": "components/handlers.html",
+    "title": "handlers",
+    "section": "",
+    "text": "Wraps mutation handlers to append alignment status OOB update. The wrapper reads segment and VAD chunk counts from state after the handler completes, ensuring counts reflect any mutations.\n\nsource\n\n\n\ndef wrap_seg_mutation_handler(\n    handler:Callable, # Handler function to wrap\n)-&gt;Callable: # Wrapped handler that appends alignment status OOB\n\nWrap a segmentation mutation handler to add alignment status OOB.\nThe handler is expected to take (state_store, workflow_id, …) as first params.\n\nsource\n\n\n\n\ndef wrap_align_mutation_handler(\n    handler:Callable, # Handler function to wrap\n)-&gt;Callable: # Wrapped handler that appends alignment status OOB\n\nWrap an alignment mutation handler to add alignment status OOB.\nThe handler is expected to take (state_store, workflow_id, …) as first params.",
+    "crumbs": [
+      "components",
+      "handlers"
+    ]
+  },
+  {
+    "objectID": "components/handlers.html#wrapper-function",
+    "href": "components/handlers.html#wrapper-function",
+    "title": "handlers",
+    "section": "",
+    "text": "Wraps mutation handlers to append alignment status OOB update. The wrapper reads segment and VAD chunk counts from state after the handler completes, ensuring counts reflect any mutations.\n\nsource\n\n\n\ndef wrap_seg_mutation_handler(\n    handler:Callable, # Handler function to wrap\n)-&gt;Callable: # Wrapped handler that appends alignment status OOB\n\nWrap a segmentation mutation handler to add alignment status OOB.\nThe handler is expected to take (state_store, workflow_id, …) as first params.\n\nsource\n\n\n\n\ndef wrap_align_mutation_handler(\n    handler:Callable, # Handler function to wrap\n)-&gt;Callable: # Wrapped handler that appends alignment status OOB\n\nWrap an alignment mutation handler to add alignment status OOB.\nThe handler is expected to take (state_store, workflow_id, …) as first params.",
+    "crumbs": [
+      "components",
+      "handlers"
+    ]
+  },
+  {
+    "objectID": "components/handlers.html#init-chrome-wrappers",
+    "href": "components/handlers.html#init-chrome-wrappers",
+    "title": "handlers",
+    "section": "Init Chrome Wrappers",
+    "text": "Init Chrome Wrappers\nWrappers for init handlers that build the full combined KB system and populate shared chrome containers. These are more complex than mutation wrappers because they need to set up the keyboard system and all shared chrome elements on first load.\n\nsource\n\ncreate_seg_init_chrome_wrapper\n\ndef create_seg_init_chrome_wrapper(\n    align_urls:AlignmentUrls, # URL bundle for alignment routes (for KB system)\n    switch_chrome_url:str, # URL for chrome switching (for KB system)\n    fa_trigger_url:str='', # URL for forced alignment trigger (optional)\n    fa_toggle_url:str='', # URL for forced alignment toggle (optional)\n    fa_available:bool=False, # Whether forced alignment plugin is available\n)-&gt;Callable: # Wrapped handler that builds KB system and shared chrome\n\nCreate a wrapper for seg init that builds combined KB system and shared chrome.\nThis is a factory that captures the URLs needed for KB system assembly. Optionally includes forced alignment controls if FA plugin is available.\n\nsource\n\n\ncreate_align_init_chrome_wrapper\n\ndef create_align_init_chrome_wrapper(\n    \n)-&gt;Callable: # Wrapped handler that adds alignment status\n\nCreate a wrapper for align init that adds mini-stats and alignment status.\nAlignment init is simpler than seg init - it doesn’t need to build the full KB system (seg init handles that). It just updates alignment-specific chrome and the alignment status badge.",
+    "crumbs": [
+      "components",
+      "handlers"
+    ]
+  },
+  {
+    "objectID": "components/handlers.html#pre-wrapped-handlers",
+    "href": "components/handlers.html#pre-wrapped-handlers",
+    "title": "handlers",
+    "section": "Pre-Wrapped Handlers",
+    "text": "Pre-Wrapped Handlers\nReady-to-use wrapped versions of mutation handlers. These are imported by routes/init.ipynb for registration.",
+    "crumbs": [
+      "components",
+      "handlers"
+    ]
+  },
+  {
+    "objectID": "components/keyboard_config.html",
+    "href": "components/keyboard_config.html",
+    "title": "keyboard_config",
+    "section": "",
+    "text": "Generic collapsible keyboard hints renderer. Works with any ZoneManager instance, wrapping the library’s render_keyboard_hints in a DaisyUI collapse.\n\nsource\n\n\n\ndef render_keyboard_hints_collapsible(\n    manager:ZoneManager, # Keyboard zone manager with actions configured\n    container_id:str='sd-keyboard-hints', # HTML ID for the hints container\n    include_zone_switch:bool=False, # Whether to include zone switch hints\n)-&gt;Any: # Collapsible keyboard hints component\n\nRender keyboard shortcut hints in a collapsible DaisyUI collapse.",
+    "crumbs": [
+      "components",
+      "keyboard_config"
+    ]
+  },
+  {
+    "objectID": "components/keyboard_config.html#keyboard-hints-component",
+    "href": "components/keyboard_config.html#keyboard-hints-component",
+    "title": "keyboard_config",
+    "section": "",
+    "text": "Generic collapsible keyboard hints renderer. Works with any ZoneManager instance, wrapping the library’s render_keyboard_hints in a DaisyUI collapse.\n\nsource\n\n\n\ndef render_keyboard_hints_collapsible(\n    manager:ZoneManager, # Keyboard zone manager with actions configured\n    container_id:str='sd-keyboard-hints', # HTML ID for the hints container\n    include_zone_switch:bool=False, # Whether to include zone switch hints\n)-&gt;Any: # Collapsible keyboard hints component\n\nRender keyboard shortcut hints in a collapsible DaisyUI collapse.",
+    "crumbs": [
+      "components",
+      "keyboard_config"
+    ]
+  },
+  {
+    "objectID": "components/keyboard_config.html#keyboard-system-builder",
+    "href": "components/keyboard_config.html#keyboard-system-builder",
+    "title": "keyboard_config",
+    "section": "Keyboard System Builder",
+    "text": "Keyboard System Builder\nBuilds the combined keyboard system with both decomposition and alignment zones. Returns (manager, system) tuple where manager is needed for hints rendering and system contains the script/inputs/buttons for the stable KB container.\nThe combined KB system is always built with both zones, regardless of which column has initialized first. Zone switching works immediately; zones with no DOM content yet will simply have no focusable items until content loads.\n\nsource\n\nbuild_combined_kb_system\n\ndef build_combined_kb_system(\n    seg_urls:SegmentationUrls, # URL bundle for segmentation routes\n    align_urls:AlignmentUrls, # URL bundle for alignment routes\n)-&gt;Tuple: # (keyboard manager, rendered keyboard system)\n\nBuild combined keyboard system with segmentation and alignment zones.",
+    "crumbs": [
+      "components",
+      "keyboard_config"
+    ]
+  },
+  {
+    "objectID": "components/keyboard_config.html#zone-change-javascript",
+    "href": "components/keyboard_config.html#zone-change-javascript",
+    "title": "keyboard_config",
+    "section": "Zone Change JavaScript",
+    "text": "Zone Change JavaScript\nGenerates JavaScript for zone change handling including: - Global callback function that runs when zones switch via keyboard - Visual styling updates (ring/opacity on columns) - Hidden input updates for active column state - Chrome swap trigger via HTMX button click - Click handlers on columns for mouse-driven zone switching\n\nsource\n\ngenerate_zone_change_js\n\ndef generate_zone_change_js(\n    switch_chrome_url:str='', # URL for chrome swap handler (empty = no swap)\n)-&gt;Script: # Script element with zone change callback and click handlers\n\nGenerate JavaScript for zone change handling and column click handlers.",
+    "crumbs": [
+      "components",
+      "keyboard_config"
+    ]
+  },
+  {
+    "objectID": "html_ids.html",
+    "href": "html_ids.html",
+    "title": "html_ids",
+    "section": "",
+    "text": "source\n\nCombinedHtmlIds\n\ndef CombinedHtmlIds(\n    args:VAR_POSITIONAL, kwargs:VAR_KEYWORD\n):\n\nHTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome.",
+    "crumbs": [
+      "html_ids"
+    ]
+  },
+  {
+    "objectID": "routes/chrome.html#router",
+    "href": "routes/chrome.html#router",
+    "title": "chrome",
+    "section": "Router",
+    "text": "Router\n\nsource\n\ninit_chrome_router\n\ndef init_chrome_router(\n    state_store:SQLiteWorkflowStateStore, # State store instance\n    workflow_id:str, # Workflow identifier\n    seg_urls:SegmentationUrls, # URL bundle for segmentation routes\n    align_urls:AlignmentUrls, # URL bundle for alignment routes\n    prefix:str, # Route prefix (e.g., \"/workflow/core/chrome\")\n)-&gt;Tuple: # (router, route_dict)\n\nInitialize chrome switching routes.",
+    "crumbs": [
+      "routes",
+      "chrome"
+    ]
+  }
+]
