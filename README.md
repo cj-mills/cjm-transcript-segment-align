@@ -19,9 +19,11 @@ pip install cjm_transcript_segment_align
     │   └── step_renderer.ipynb    # Phase 2 combined step renderer: dual-column layout for Segment & Align
     ├── routes/ (1)
     │   └── chrome.ipynb  # Shared chrome switching route handlers for the combined Phase 2 step
+    ├── services/ (1)
+    │   └── forced_alignment.ipynb  # Forced alignment service for audio-informed text pre-splitting via forced alignment plugin
     └── html_ids.ipynb  # HTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome
 
-Total: 6 notebooks across 3 directories
+Total: 7 notebooks across 3 directories
 
 ## Module Dependencies
 
@@ -33,14 +35,15 @@ graph LR
     components_step_renderer[components.step_renderer<br/>step_combined]
     html_ids[html_ids<br/>html_ids]
     routes_chrome[routes.chrome<br/>chrome]
+    services_forced_alignment[services.forced_alignment<br/>forced_alignment]
 
     components_handlers --> components_step_renderer
-    components_handlers --> components_keyboard_config
     components_handlers --> html_ids
+    components_handlers --> components_keyboard_config
     components_keyboard_config --> html_ids
-    components_step_renderer --> components_keyboard_config
     components_step_renderer --> components_helpers
     components_step_renderer --> html_ids
+    components_step_renderer --> components_keyboard_config
     routes_chrome --> components_step_renderer
     routes_chrome --> html_ids
     routes_chrome --> components_keyboard_config
@@ -98,6 +101,142 @@ def init_chrome_router(
 
 ``` python
 DEBUG_SWITCH_CHROME = False
+```
+
+### forced_alignment (`forced_alignment.ipynb`)
+
+> Forced alignment service for audio-informed text pre-splitting via
+> forced alignment plugin
+
+#### Import
+
+``` python
+from cjm_transcript_segment_align.services.forced_alignment import (
+    map_fa_words_to_text,
+    assign_words_to_chunks,
+    build_segments_from_alignment,
+    ForcedAlignmentService
+)
+```
+
+#### Functions
+
+``` python
+def _strip_punct(text: str) -> str
+    "Strip punctuation from text for comparison with FA output."
+```
+
+``` python
+def map_fa_words_to_text(
+    text: str,  # Original text with punctuation
+    fa_items: List[ForcedAlignItem],  # FA word-level alignment results
+) -> List[Tuple[int, int]]:  # List of (start_char, end_char) spans into original text
+    """
+    Map forced alignment words back to character spans in the original text.
+    
+    Walks through the original text, matching each FA word (punctuation-stripped)
+    against original text tokens. Returns character offset pairs for each FA word.
+    """
+```
+
+``` python
+def assign_words_to_chunks(
+    fa_items: List[ForcedAlignItem],  # FA word-level alignment results
+    vad_chunks: List[VADChunk],  # VAD chunks with start/end times
+) -> List[int]:  # Chunk index for each FA word
+    """
+    Assign each FA word to a VAD chunk based on timestamp overlap.
+    
+    Words whose start_time falls within a chunk's [start, end] range are
+    assigned to that chunk. Words in silence gaps are assigned to the
+    nearest chunk by time proximity.
+    """
+```
+
+``` python
+def build_segments_from_alignment(
+    text: str,  # Original text with punctuation
+    spans: List[Tuple[int, int]],  # Character spans from map_fa_words_to_text
+    assignments: List[int],  # Chunk index per word from assign_words_to_chunks
+    num_chunks: int,  # Total number of VAD chunks
+    source_id: Optional[str] = None,  # Source block ID for traceability
+    source_provider_id: Optional[str] = None,  # Source provider identifier
+) -> List[TextSegment]:  # One segment per VAD chunk
+    """
+    Build TextSegment list by grouping words by their assigned VAD chunk.
+    
+    Each VAD chunk gets one TextSegment whose text is the joined original
+    (punctuated) words assigned to that chunk.
+    """
+```
+
+#### Classes
+
+``` python
+class ForcedAlignmentService:
+    def __init__(
+        self,
+        plugin_manager: PluginManager,  # Plugin manager for accessing forced alignment plugin
+        plugin_name: str = "cjm-transcription-plugin-qwen3-forced-aligner",  # Name of the FA plugin
+    )
+    "Service for audio-informed text pre-splitting via forced alignment plugin."
+    
+    def __init__(
+            self,
+            plugin_manager: PluginManager,  # Plugin manager for accessing forced alignment plugin
+            plugin_name: str = "cjm-transcription-plugin-qwen3-forced-aligner",  # Name of the FA plugin
+        )
+        "Initialize the forced alignment service."
+    
+    def is_available(self) -> bool:  # True if plugin is loaded and ready
+            """Check if the forced alignment plugin is available."""
+            return self._manager.get_plugin(self._plugin_name) is not None
+    
+        def ensure_loaded(
+            self,
+            config: Optional[Dict[str, Any]] = None,  # Optional plugin configuration
+        ) -> bool:  # True if successfully loaded
+        "Check if the forced alignment plugin is available."
+    
+    def ensure_loaded(
+            self,
+            config: Optional[Dict[str, Any]] = None,  # Optional plugin configuration
+        ) -> bool:  # True if successfully loaded
+        "Ensure the forced alignment plugin is loaded."
+    
+    async def align_and_split_async(
+            self,
+            audio_path: str,  # Path to the audio file
+            text: str,  # Original transcript text blob (with punctuation)
+            vad_chunks: List[VADChunk],  # VAD chunks for this audio
+            source_id: Optional[str] = None,  # Source block ID for traceability
+            source_provider_id: Optional[str] = None,  # Source provider identifier
+        ) -> List[TextSegment]:  # One segment per VAD chunk
+        "Run forced alignment and split text into segments matching VAD chunks."
+    
+    def align_and_split(
+            self,
+            audio_path: str,  # Path to the audio file
+            text: str,  # Original transcript text blob
+            vad_chunks: List[VADChunk],  # VAD chunks for this audio
+            source_id: Optional[str] = None,
+            source_provider_id: Optional[str] = None,
+        ) -> List[TextSegment]:  # One segment per VAD chunk
+        "Run forced alignment and split text synchronously."
+    
+    async def align_and_split_combined_async(
+            self,
+            source_blocks: List[Any],  # SourceBlock objects with id, provider_id, text
+            audio_paths: List[str],  # Audio file path per source block
+            vad_chunks_by_source: List[List[VADChunk]],  # VAD chunks per source block
+        ) -> List[TextSegment]:  # Combined segments with global indexing
+        "Align and split multiple source blocks with their respective audio."
+```
+
+#### Variables
+
+``` python
+_PUNCT_RE
 ```
 
 ### handlers (`handlers.ipynb`)
