@@ -39,21 +39,21 @@ graph LR
     routes_forced_alignment[routes.forced_alignment<br/>forced_alignment]
     services_forced_alignment[services.forced_alignment<br/>forced_alignment]
 
-    components_handlers --> routes_forced_alignment
-    components_handlers --> components_keyboard_config
-    components_handlers --> html_ids
     components_handlers --> components_step_renderer
+    components_handlers --> html_ids
+    components_handlers --> components_keyboard_config
+    components_handlers --> routes_forced_alignment
     components_keyboard_config --> html_ids
-    components_step_renderer --> components_helpers
-    components_step_renderer --> components_keyboard_config
     components_step_renderer --> html_ids
+    components_step_renderer --> components_keyboard_config
+    components_step_renderer --> components_helpers
     routes_chrome --> components_handlers
     routes_chrome --> html_ids
-    routes_chrome --> components_step_renderer
     routes_chrome --> components_keyboard_config
-    routes_forced_alignment --> services_forced_alignment
-    routes_forced_alignment --> html_ids
+    routes_chrome --> components_step_renderer
     routes_forced_alignment --> components_step_renderer
+    routes_forced_alignment --> html_ids
+    routes_forced_alignment --> services_forced_alignment
 ```
 
 *15 cross-module dependencies detected*
@@ -447,9 +447,11 @@ def create_seg_init_chrome_wrapper(
 def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds alignment status
     """Create a wrapper for align init that adds mini-stats and alignment status.
     
-    Alignment init is simpler than seg init - it doesn't need to build the
-    full KB system (seg init handles that). It just updates alignment-specific
-    chrome and the alignment status badge.
+    Returns a footer OOB (not a standalone alignment status badge) to avoid
+    a race condition: both seg and align init auto-trigger on load, and the
+    alignment status badge only exists inside the footer after seg init's
+    footer OOB is processed. Using a footer OOB is safe because the footer
+    container always exists in the DOM.
     """
     async def wrapped_align_init(
         state_store:WorkflowStateStore,
@@ -465,9 +467,11 @@ def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds
     """
     Create a wrapper for align init that adds mini-stats and alignment status.
     
-    Alignment init is simpler than seg init - it doesn't need to build the
-    full KB system (seg init handles that). It just updates alignment-specific
-    chrome and the alignment status badge.
+    Returns a footer OOB (not a standalone alignment status badge) to avoid
+    a race condition: both seg and align init auto-trigger on load, and the
+    alignment status badge only exists inside the footer after seg init's
+    footer OOB is processed. Using a footer OOB is safe because the footer
+    container always exists in the DOM.
     """
 ```
 

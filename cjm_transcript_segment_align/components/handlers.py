@@ -361,9 +361,11 @@ def create_seg_init_chrome_wrapper(
 def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds alignment status
     """Create a wrapper for align init that adds mini-stats and alignment status.
     
-    Alignment init is simpler than seg init - it doesn't need to build the
-    full KB system (seg init handles that). It just updates alignment-specific
-    chrome and the alignment status badge.
+    Returns a footer OOB (not a standalone alignment status badge) to avoid
+    a race condition: both seg and align init auto-trigger on load, and the
+    alignment status badge only exists inside the footer after seg init's
+    footer OOB is processed. Using a footer OOB is safe because the footer
+    container always exists in the DOM.
     """
     async def wrapped_align_init(
         state_store:WorkflowStateStore,
@@ -376,7 +378,11 @@ def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds
         visible_count:int=5,
         card_width:int=40,
     ):
-        """Wrapped align init that adds mini-stats and alignment status."""
+        """Wrapped align init that adds mini-stats and alignment status in footer."""
+        from cjm_transcript_segmentation.components.step_renderer import render_seg_footer_content
+        from cjm_fasthtml_tailwind.utilities.typography import font_size as fs
+        from cjm_fasthtml_daisyui.utilities.semantic_colors import text_dui as td
+
         # Call pure domain handler
         result: AlignInitResult = await _handle_align_init(
             state_store, workflow_id, source_service, alignment_service,
@@ -385,18 +391,35 @@ def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds
         
         session_id = get_session_id(sess)
         
-        # Get segment count for alignment status
+        # Get segment state for footer rendering and alignment status
         workflow_state = state_store.get_state(workflow_id, session_id)
-        segment_count = len(workflow_state.get("step_states", {}).get("segmentation", {}).get("segments", []))
+        seg_state = workflow_state.get("step_states", {}).get("segmentation", {})
+        segment_count = len(seg_state.get("segments", []))
         chunk_count = len(result.chunks)
         
         # Mini-stats badge OOB
         mini_stats_oob = render_align_mini_stats_badge(result.chunks, oob=True)
         
-        # Alignment status OOB
-        alignment_status_oob = render_alignment_status(segment_count, chunk_count, oob=True)
+        # Footer OOB with alignment status (targets sd-shared-footer which always exists,
+        # unlike sd-alignment-status which is inside the footer and may not exist yet)
+        segments = [TextSegment.from_dict(s) for s in seg_state.get("segments", [])]
+        focused_index = seg_state.get("focused_index", 0)
         
-        return (result.column_body, mini_stats_oob, alignment_status_oob)
+        if segments:
+            column_footer = render_seg_footer_content(segments, focused_index)
+        else:
+            column_footer = Span(
+                "Footer with progress and timestamp details will appear here.",
+                cls=combine_classes(fs.sm, td.base_content.opacity(50))
+            )
+        
+        footer_oob = Div(
+            render_footer_inner_content(column_footer, segment_count, chunk_count),
+            id=CombinedHtmlIds.SHARED_FOOTER,
+            hx_swap_oob="innerHTML"
+        )
+        
+        return (result.column_body, mini_stats_oob, footer_oob)
     
     return wrapped_align_init
 

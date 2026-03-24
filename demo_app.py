@@ -12,7 +12,7 @@ from pathlib import Path
 import tempfile
 
 from fasthtml.common import (
-    fast_app, Div, H1, P, Span, Input, Button,
+    fast_app, Div, H1, P, Span, Input, Button, Script,
     APIRouter, FileResponse,
 )
 
@@ -289,7 +289,16 @@ def render_demo_page(
             hx_swap="none",
         )
 
+        # Debug: catch OOB target errors
+        oob_debug = Script("""
+            document.body.addEventListener('htmx:oobErrorNoTarget', function(e) {
+                var id = e.detail.content ? e.detail.content.id : 'unknown';
+                console.error('[OOB ERROR] Missing target ID:', id, e.detail.content);
+            });
+        """)
+
         return Div(
+            oob_debug,
             # Header
             Div(
                 H1("Segment & Align Demo",
