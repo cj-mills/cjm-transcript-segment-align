@@ -71,8 +71,7 @@ from cjm_transcript_vad_align.routes.init import init_alignment_routers
 # Combined library (this library)
 from cjm_transcript_segment_align.html_ids import CombinedHtmlIds
 from cjm_transcript_segment_align.components.handlers import (
-    wrapped_seg_split, wrapped_seg_merge, wrapped_seg_undo,
-    wrapped_seg_reset, wrapped_seg_ai_split,
+    create_seg_mutation_wrappers,
     create_seg_init_chrome_wrapper, create_align_init_chrome_wrapper,
 )
 from cjm_transcript_segment_align.components.step_renderer import (
@@ -81,7 +80,7 @@ from cjm_transcript_segment_align.components.step_renderer import (
 from cjm_transcript_segment_align.components.keyboard_config import SWITCH_CHROME_BTN_ID
 from cjm_transcript_segment_align.routes.chrome import init_chrome_router
 from cjm_transcript_segment_align.routes.forced_alignment import (
-    init_forced_alignment_routers, render_fa_controls,
+    init_forced_alignment_routers,
 )
 from cjm_transcript_segment_align.services.forced_alignment import ForcedAlignmentService
 
@@ -256,9 +255,6 @@ def render_demo_page(
             cls=str(p(2))
         )
 
-        # FA controls container (empty until seg init populates it)
-        fa_controls = Div(id=CombinedHtmlIds.FA_CONTROLS, cls=combine_classes(flex_display, items.center, gap(2)))
-
         controls = Div(
             P("Width controls will appear here after initialization.", cls=placeholder_cls),
             id=CombinedHtmlIds.SHARED_CONTROLS,
@@ -307,7 +303,6 @@ def render_demo_page(
             # Shared chrome
             hints,
             toolbar,
-            fa_controls,
             controls,
 
             # Dual-column content area
@@ -473,23 +468,15 @@ def main():
     audio_src_url = audio_src.to()
 
     # -------------------------------------------------------------------------
-    # Set up segmentation routes (with wrapped mutation handlers)
+    # Set up segmentation routes (mutation wrappers created after FA routes)
     # -------------------------------------------------------------------------
-    wrapped_handlers = {
-        "split": wrapped_seg_split,
-        "merge": wrapped_seg_merge,
-        "undo": wrapped_seg_undo,
-        "reset": wrapped_seg_reset,
-        "ai_split": wrapped_seg_ai_split,
-    }
-
+    # Init segmentation routes without mutation wrappers (FA URLs needed first)
     seg_routers, seg_urls, seg_routes = init_segmentation_routers(
         state_store=state_store,
         workflow_id=workflow_id,
         source_service=source_service,
         segmentation_service=segmentation_service,
         prefix="/seg",
-        wrapped_handlers=wrapped_handlers,
     )
 
     # -------------------------------------------------------------------------
@@ -505,19 +492,7 @@ def main():
     )
 
     # -------------------------------------------------------------------------
-    # Set up chrome switching route (from this library)
-    # -------------------------------------------------------------------------
-    chrome_router, chrome_routes = init_chrome_router(
-        state_store=state_store,
-        workflow_id=workflow_id,
-        seg_urls=seg_urls,
-        align_urls=align_urls,
-        prefix="/chrome",
-    )
-    switch_chrome_url = chrome_routes["switch_chrome"].to()
-
-    # -------------------------------------------------------------------------
-    # Set up forced alignment routes
+    # Set up forced alignment routes (before chrome — chrome needs FA URLs)
     # -------------------------------------------------------------------------
     fa_router, fa_routes = init_forced_alignment_routers(
         state_store=state_store,
@@ -531,9 +506,70 @@ def main():
     fa_toggle_url = fa_routes["toggle"].to() if fa_is_available else ""
 
     # -------------------------------------------------------------------------
+    # Set up chrome switching route (needs FA URLs for toolbar extra_actions)
+    # -------------------------------------------------------------------------
+    chrome_router, chrome_routes = init_chrome_router(
+        state_store=state_store,
+        workflow_id=workflow_id,
+        seg_urls=seg_urls,
+        align_urls=align_urls,
+        prefix="/chrome",
+        fa_trigger_url=fa_trigger_url,
+        fa_toggle_url=fa_toggle_url,
+        fa_available=fa_is_available,
+    )
+    switch_chrome_url = chrome_routes["switch_chrome"].to()
+
+    # -------------------------------------------------------------------------
+    # Create mutation wrappers (now that FA URLs are known)
+    # -------------------------------------------------------------------------
+    wrapped_handlers = create_seg_mutation_wrappers(
+        fa_trigger_url=fa_trigger_url,
+        fa_toggle_url=fa_toggle_url,
+        fa_available=fa_is_available,
+    )
+
+    # Override mutation routes with wrapped versions
+    seg_mutation_router = APIRouter(prefix="/seg/workflow")
+
+    @seg_mutation_router
+    async def split(request, sess, segment_index: int):
+        return await wrapped_handlers["split"](
+            state_store, workflow_id, request, sess, segment_index,
+            urls=seg_urls, max_history_depth=10,
+        )
+
+    @seg_mutation_router
+    async def merge(request, sess, segment_index: int):
+        return await wrapped_handlers["merge"](
+            state_store, workflow_id, request, sess, segment_index,
+            urls=seg_urls, max_history_depth=10,
+        )
+
+    @seg_mutation_router
+    async def undo(request, sess):
+        return await wrapped_handlers["undo"](
+            state_store, workflow_id, request, sess, urls=seg_urls,
+        )
+
+    @seg_mutation_router
+    async def reset(request, sess):
+        return await wrapped_handlers["reset"](
+            state_store, workflow_id, request, sess,
+            urls=seg_urls, max_history_depth=10,
+        )
+
+    @seg_mutation_router
+    async def ai_split(request, sess):
+        return await wrapped_handlers["ai_split"](
+            state_store, workflow_id, segmentation_service, request, sess,
+            urls=seg_urls, max_history_depth=10,
+        )
+
+    # -------------------------------------------------------------------------
     # Override init routes with combined wrappers
     # -------------------------------------------------------------------------
-    # Seg init wrapper (builds combined KB system + shared chrome + FA controls)
+    # Seg init wrapper (builds combined KB system + shared chrome)
     wrapped_seg_init_fn = create_seg_init_chrome_wrapper(
         align_urls=align_urls,
         switch_chrome_url=switch_chrome_url,
@@ -583,7 +619,7 @@ def main():
     # -------------------------------------------------------------------------
     register_routes(
         app, router, audio_router, chrome_router, fa_router,
-        seg_init_router, align_init_router,
+        seg_mutation_router, seg_init_router, align_init_router,
         *seg_routers, *align_routers,
     )
 

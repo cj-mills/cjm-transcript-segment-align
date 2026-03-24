@@ -39,6 +39,7 @@ graph LR
     routes_forced_alignment[routes.forced_alignment<br/>forced_alignment]
     services_forced_alignment[services.forced_alignment<br/>forced_alignment]
 
+    components_handlers --> routes_forced_alignment
     components_handlers --> components_keyboard_config
     components_handlers --> html_ids
     components_handlers --> components_step_renderer
@@ -46,15 +47,16 @@ graph LR
     components_step_renderer --> components_helpers
     components_step_renderer --> components_keyboard_config
     components_step_renderer --> html_ids
+    routes_chrome --> components_handlers
     routes_chrome --> html_ids
-    routes_chrome --> components_keyboard_config
     routes_chrome --> components_step_renderer
+    routes_chrome --> components_keyboard_config
+    routes_forced_alignment --> services_forced_alignment
     routes_forced_alignment --> html_ids
     routes_forced_alignment --> components_step_renderer
-    routes_forced_alignment --> services_forced_alignment
 ```
 
-*13 cross-module dependencies detected*
+*15 cross-module dependencies detected*
 
 ## CLI Reference
 
@@ -87,6 +89,9 @@ async def _handle_switch_chrome(
     sess,  # FastHTML session object
     seg_urls:SegmentationUrls,  # URL bundle for segmentation routes
     align_urls:AlignmentUrls,  # URL bundle for alignment routes
+    fa_trigger_url:str="",  # URL for FA trigger route
+    fa_toggle_url:str="",  # URL for FA toggle route
+    fa_available:bool=False,  # Whether FA plugin is available
 ) -> tuple:  # OOB swaps for shared chrome containers
     "Switch shared chrome content based on active column."
 ```
@@ -98,6 +103,9 @@ def init_chrome_router(
     seg_urls: SegmentationUrls,  # URL bundle for segmentation routes
     align_urls: AlignmentUrls,  # URL bundle for alignment routes
     prefix: str,  # Route prefix (e.g., "/workflow/core/chrome")
+    fa_trigger_url: str = "",  # URL for FA trigger route
+    fa_toggle_url: str = "",  # URL for FA toggle route
+    fa_available: bool = False,  # Whether FA plugin is available
 ) -> Tuple[APIRouter, Dict[str, Callable]]:  # (router, route_dict)
     "Initialize chrome switching routes."
 ```
@@ -117,12 +125,10 @@ DEBUG_SWITCH_CHROME = False
 
 ``` python
 from cjm_transcript_segment_align.routes.forced_alignment import (
-    FA_CONTAINER_ID,
-    FA_STATUS_ID,
+    FA_SLOT_ID,
     render_fa_trigger_button,
     render_fa_progress,
     render_fa_toggle,
-    render_fa_controls,
     init_forced_alignment_routers
 )
 ```
@@ -155,24 +161,6 @@ def render_fa_toggle(
 ```
 
 ``` python
-def render_fa_controls(
-    trigger_url: str = "",  # URL for trigger route
-    toggle_url: str = "",  # URL for toggle route
-    active_presplit: Optional[str] = None,  # Current active mode (None = no FA done yet)
-    fa_available: bool = False,  # Whether FA plugin is available
-    oob: bool = False,  # Whether to render as OOB swap
-) -> Any:  # FA controls container
-    """
-    Render the forced alignment controls container.
-    
-    Shows either:
-    - Trigger button (if FA not yet run)
-    - Toggle (if FA has been run)
-    - Nothing (if FA plugin not available)
-    """
-```
-
-``` python
 async def _handle_fa_trigger(
     state_store: SQLiteWorkflowStateStore,
     workflow_id: str,
@@ -181,10 +169,9 @@ async def _handle_fa_trigger(
     request: Any,
     sess: Any,
     seg_urls: SegmentationUrls,
-    progress_url: str,
     toggle_url: str,
-) -> Any:  # OOB updates for card stack, alignment status, FA controls, mini-stats
-    "Trigger forced alignment and replace working segments."
+) -> Any:  # Targeted OOB updates (slots + stats + toolbar with toggle + alignment status + mini-stats)
+    "Trigger forced alignment and replace working segments with FA splits."
 ```
 
 ``` python
@@ -195,8 +182,13 @@ async def _handle_fa_toggle(
     sess: Any,
     seg_urls: SegmentationUrls,
     toggle_url: str,
-) -> Any:  # OOB updates for card stack, alignment status, FA controls, mini-stats
-    "Toggle between NLTK and force-aligned pre-splits."
+) -> Any:  # Targeted OOB updates (slots + stats + toolbar with toggle + alignment status + mini-stats)
+    """
+    Toggle between NLTK and force-aligned pre-split snapshots.
+    
+    Loads the selected pre-split snapshot as the current working state.
+    Pushes the previous working state to undo history (single history model).
+    """
 ```
 
 ``` python
@@ -214,8 +206,7 @@ def init_forced_alignment_routers(
 #### Variables
 
 ``` python
-FA_CONTAINER_ID
-FA_STATUS_ID
+FA_SLOT_ID
 ```
 
 ### forced_alignment (`forced_alignment.ipynb`)
@@ -363,15 +354,13 @@ _PUNCT_RE
 
 ``` python
 from cjm_transcript_segment_align.components.handlers import (
-    wrapped_seg_split,
-    wrapped_seg_merge,
-    wrapped_seg_undo,
-    wrapped_seg_reset,
-    wrapped_seg_ai_split,
-    wrap_seg_mutation_handler,
+    segments_match_presplit,
+    build_fa_extra_actions,
+    create_seg_mutation_wrapper,
     wrap_align_mutation_handler,
     create_seg_init_chrome_wrapper,
-    create_align_init_chrome_wrapper
+    create_align_init_chrome_wrapper,
+    create_seg_mutation_wrappers
 )
 ```
 
@@ -380,19 +369,50 @@ from cjm_transcript_segment_align.components.handlers import (
 ``` python
 def _find_session_id(args, kwargs):
     """Find session_id from args or kwargs."""
-    # First check kwargs
     if 'sess' in kwargs
     "Find session_id from args or kwargs."
 ```
 
 ``` python
-def wrap_seg_mutation_handler(
-    handler: Callable,  # Handler function to wrap
-) -> Callable:  # Wrapped handler that appends alignment status OOB
+def segments_match_presplit(
+    current_segments: list,  # Current segment dicts
+    presplit: list,  # Pre-split snapshot segment dicts
+) -> bool:  # Whether current segments match the pre-split
+    "Check if current segments match a pre-split snapshot by text content."
+```
+
+``` python
+def build_fa_extra_actions(
+    seg_state: dict,  # Segmentation step state dict
+    fa_trigger_url: str = "",  # URL for FA trigger route
+    fa_toggle_url: str = "",  # URL for FA toggle route
+    fa_available: bool = False,  # Whether FA plugin is available
+) -> Any:  # FA controls wrapped in slot div (or None)
     """
-    Wrap a segmentation mutation handler to add alignment status OOB.
+    Build FA controls for the toolbar extra_actions slot.
     
-    The handler is expected to take (state_store, workflow_id, ...) as first params.
+    Shows toggle when current segments match either pre-split snapshot.
+    Shows trigger button when FA pre-split doesn't exist or current doesn't match either.
+    """
+```
+
+``` python
+def create_seg_mutation_wrapper(
+    handler_result: Callable,  # _handle_seg_*_result function
+    fa_trigger_url: str = "",  # URL for FA trigger route
+    fa_toggle_url: str = "",  # URL for FA toggle route
+    fa_available: bool = False,  # Whether FA plugin is available
+    clear_fa_presplit: bool = False,  # Whether to clear fa_presplit after handler (for NLTK Split)
+) -> Callable:  # Wrapped handler that builds OOB with FA extra_actions + alignment status
+    """
+    Create a wrapped mutation handler that uses SegMutationResult.
+    
+    Calls the _result handler variant, builds targeted OOB response with FA
+    controls in toolbar, and appends alignment status + mini-stats OOB.
+    Computes nltk_split_disabled from state for toolbar rendering.
+    
+    When clear_fa_presplit=True (used for NLTK Split), clears the FA pre-split
+    snapshot so the toggle is replaced with the Force Align button.
     """
 ```
 
@@ -418,8 +438,8 @@ def create_seg_init_chrome_wrapper(
     """
     Create a wrapper for seg init that builds combined KB system and shared chrome.
     
-    This is a factory that captures the URLs needed for KB system assembly.
-    Optionally includes forced alignment controls if FA plugin is available.
+    Saves nltk_presplit snapshot at init time for match detection.
+    FA controls are rendered in the toolbar via extra_actions.
     """
 ```
 
@@ -448,6 +468,22 @@ def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds
     Alignment init is simpler than seg init - it doesn't need to build the
     full KB system (seg init handles that). It just updates alignment-specific
     chrome and the alignment status badge.
+    """
+```
+
+``` python
+def create_seg_mutation_wrappers(
+    fa_trigger_url: str = "",  # URL for FA trigger route
+    fa_toggle_url: str = "",  # URL for FA toggle route
+    fa_available: bool = False,  # Whether FA plugin is available
+) -> dict:  # Dict with keys: split, merge, undo, reset, ai_split
+    """
+    Create wrapped mutation handlers with FA controls in toolbar.
+    
+    Returns a dict of handler name → wrapped handler function.
+    Called at setup time when FA URLs are known.
+    The ai_split wrapper has clear_fa_presplit=True — clicking NLTK Split
+    discards the FA pre-split snapshot and replaces the toggle with the trigger button.
     """
 ```
 
@@ -685,6 +721,8 @@ def _render_shared_chrome(
     align_state:dict=None,  # Extracted alignment state (None = no VAD data yet)
     urls:SegmentationUrls=None,  # Segmentation URL bundle (required when seg_state provided)
     kb_manager:Any=None,  # Keyboard manager (required when seg_state provided)
+    fa_extra_actions:Any=None,  # FA controls for toolbar extra_actions slot
+    nltk_split_disabled:bool=False,  # Whether NLTK Split button is disabled
 ) -> tuple:  # (hints, toolbar, controls, footer)
     """
     Render shared chrome containers, populated with segmentation content when initialized.
@@ -728,6 +766,9 @@ def render_combined_step(
     seg_urls:SegmentationUrls=None,  # URL bundle for segmentation routes
     align_urls:AlignmentUrls=None,  # URL bundle for alignment routes
     switch_chrome_url:str="",  # URL for chrome switching route
+    fa_available:bool=False,  # Whether forced alignment plugin is available
+    fa_trigger_url:str="",  # URL for forced alignment trigger route
+    fa_toggle_url:str="",  # URL for forced alignment toggle route
 ) -> Any:  # FastHTML component with full dual-column layout
     "Render Phase 2: Combined Segment & Align step with dual-column layout."
 ```

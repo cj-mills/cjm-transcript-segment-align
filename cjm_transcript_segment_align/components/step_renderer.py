@@ -213,6 +213,8 @@ def _render_shared_chrome(
     align_state:dict=None,  # Extracted alignment state (None = no VAD data yet)
     urls:SegmentationUrls=None,  # Segmentation URL bundle (required when seg_state provided)
     kb_manager:Any=None,  # Keyboard manager (required when seg_state provided)
+    fa_extra_actions:Any=None,  # FA controls for toolbar extra_actions slot
+    nltk_split_disabled:bool=False,  # Whether NLTK Split button is disabled
 ) -> tuple:  # (hints, toolbar, controls, footer)
     """Render shared chrome containers, populated with segmentation content when initialized.
     
@@ -244,6 +246,8 @@ def _render_shared_chrome(
             undo_url=urls.undo,
             can_undo=(len(history) > 0),
             visible_count=visible_count,
+            extra_actions=fa_extra_actions,
+            nltk_split_disabled=nltk_split_disabled,
         )
     else:
         toolbar_content = _placeholder("Toolbar actions will appear here based on the active column.")
@@ -424,8 +428,15 @@ def render_combined_step(
     seg_urls:SegmentationUrls=None,  # URL bundle for segmentation routes
     align_urls:AlignmentUrls=None,  # URL bundle for alignment routes
     switch_chrome_url:str="",  # URL for chrome switching route
+    fa_available:bool=False,  # Whether forced alignment plugin is available
+    fa_trigger_url:str="",  # URL for forced alignment trigger route
+    fa_toggle_url:str="",  # URL for forced alignment toggle route
 ) -> Any:  # FastHTML component with full dual-column layout
     """Render Phase 2: Combined Segment & Align step with dual-column layout."""
+    from cjm_transcript_segment_align.components.handlers import (
+        build_fa_extra_actions, segments_match_presplit,
+    )
+
     if DEBUG_COMBINED_RENDER:
         print("[COMBINED_RENDER] render_combined_step called")
 
@@ -441,6 +452,18 @@ def render_combined_step(
     if DEBUG_COMBINED_RENDER:
         print(f"[COMBINED_RENDER] is_seg_init: {is_seg_init}")
         print(f"[COMBINED_RENDER] is_align_init: {is_align_init}")
+
+    # Build FA extra_actions and nltk_split_disabled from state
+    fa_extra = None
+    nltk_disabled = False
+    if is_seg_init:
+        fa_extra = build_fa_extra_actions(
+            seg_state, fa_trigger_url, fa_toggle_url, fa_available,
+        )
+        nltk_presplit = seg_state.get("nltk_presplit", [])
+        nltk_disabled = segments_match_presplit(
+            seg_state.get("segments", []), nltk_presplit,
+        ) if nltk_presplit else True  # Disabled at init if no presplit saved yet
 
     # Variables for KB system
     kb_manager = None
@@ -473,6 +496,8 @@ def render_combined_step(
             align_state=align_state,
             urls=seg_urls,
             kb_manager=kb_manager,
+            fa_extra_actions=fa_extra,
+            nltk_split_disabled=nltk_disabled,
         )
 
         seg_col = _render_seg_column(
@@ -544,12 +569,6 @@ def render_combined_step(
             hx_swap="none",
         )
 
-    # FA controls container (empty initially, populated by seg init OOB swap)
-    fa_controls = Div(
-        id=CombinedHtmlIds.FA_CONTROLS,
-        cls=combine_classes(flex_display, items.center, gap(2)),
-    )
-
     return Div(
         Div(
             H2("Segment & Align", cls=combine_classes(font_size._3xl, font_weight.bold)),
@@ -560,7 +579,6 @@ def render_combined_step(
         ),
         hints,
         toolbar,
-        fa_controls,
         controls,
         Div(
             seg_col,

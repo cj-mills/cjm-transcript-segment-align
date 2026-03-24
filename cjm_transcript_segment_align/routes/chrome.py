@@ -38,9 +38,12 @@ from cjm_transcript_vad_align.components.card_stack_config import (
     ALIGN_CS_CONFIG, ALIGN_CS_IDS,
 )
 
-# Footer helper
+# Footer helper + FA extra_actions builder + match detection
 from cjm_transcript_segment_align.components.step_renderer import (
     render_footer_inner_content,
+)
+from cjm_transcript_segment_align.components.handlers import (
+    build_fa_extra_actions, segments_match_presplit,
 )
 
 # Keyboard config
@@ -58,6 +61,9 @@ async def _handle_switch_chrome(
     sess,  # FastHTML session object
     seg_urls:SegmentationUrls,  # URL bundle for segmentation routes
     align_urls:AlignmentUrls,  # URL bundle for alignment routes
+    fa_trigger_url:str="",  # URL for FA trigger route
+    fa_toggle_url:str="",  # URL for FA toggle route
+    fa_available:bool=False,  # Whether FA plugin is available
 ) -> tuple:  # OOB swaps for shared chrome containers
     """Switch shared chrome content based on active column."""
     form = await request.form()
@@ -88,6 +94,15 @@ async def _handle_switch_chrome(
         is_auto_mode = seg_state.get("is_auto_mode", False)
         card_width = seg_state.get("card_width", DEFAULT_CARD_WIDTH)
 
+        # Build FA extra_actions and NLTK Split disabled state
+        fa_extra = build_fa_extra_actions(
+            seg_state, fa_trigger_url, fa_toggle_url, fa_available,
+        )
+        nltk_presplit = seg_state.get("nltk_presplit", [])
+        nltk_disabled = segments_match_presplit(
+            seg_state.get("segments", []), nltk_presplit,
+        )
+
         hints_content = render_keyboard_hints_collapsible(kb_manager, include_zone_switch=True)
         toolbar_content = render_seg_toolbar(
             reset_url=seg_urls.reset,
@@ -96,6 +111,8 @@ async def _handle_switch_chrome(
             can_undo=(len(history) > 0),
             visible_count=visible_count,
             is_auto_mode=is_auto_mode,
+            extra_actions=fa_extra,
+            nltk_split_disabled=nltk_disabled,
         )
         controls_content = render_width_slider(SEG_CS_CONFIG, SEG_CS_IDS, card_width=card_width)
         column_footer = render_seg_footer_content(segments, focused_index)
@@ -149,6 +166,9 @@ def init_chrome_router(
     seg_urls: SegmentationUrls,  # URL bundle for segmentation routes
     align_urls: AlignmentUrls,  # URL bundle for alignment routes
     prefix: str,  # Route prefix (e.g., "/workflow/core/chrome")
+    fa_trigger_url: str = "",  # URL for FA trigger route
+    fa_toggle_url: str = "",  # URL for FA toggle route
+    fa_available: bool = False,  # Whether FA plugin is available
 ) -> Tuple[APIRouter, Dict[str, Callable]]:  # (router, route_dict)
     """Initialize chrome switching routes."""
     router = APIRouter(prefix=prefix)
@@ -160,6 +180,9 @@ def init_chrome_router(
             state_store, workflow_id, request, sess,
             seg_urls=seg_urls,
             align_urls=align_urls,
+            fa_trigger_url=fa_trigger_url,
+            fa_toggle_url=fa_toggle_url,
+            fa_available=fa_available,
         )
 
     routes = {
