@@ -17,14 +17,16 @@ pip install cjm_transcript_segment_align
     │   ├── helpers.ipynb          # State extraction helpers for cross-domain coordination in Phase 2 combined step
     │   ├── keyboard_config.ipynb  # Shared keyboard navigation configuration for the combined Phase 2 step
     │   └── step_renderer.ipynb    # Phase 2 combined step renderer: dual-column layout for Segment & Align
-    ├── routes/ (2)
+    ├── routes/ (3)
     │   ├── chrome.ipynb            # Shared chrome switching route handlers for the combined Phase 2 step
-    │   └── forced_alignment.ipynb  # Routes for toggling between NLTK and force-aligned pre-splits, plus rendering helpers for FA UI controls. Trigger and progress are handled by `cjm-fasthtml-job-monitor`.
+    │   ├── forced_alignment.ipynb  # Routes for toggling between NLTK and force-aligned pre-splits, plus rendering helpers for FA UI controls. Trigger and progress are handled by `cjm-fasthtml-job-monitor`.
+    │   └── init.ipynb              # Consolidated router assembly for the segment-align step
     ├── services/ (1)
     │   └── forced_alignment.ipynb  # Forced alignment service for audio-informed text pre-splitting via forced alignment plugin
-    └── html_ids.ipynb  # HTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome
+    ├── html_ids.ipynb  # HTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome
+    └── models.ipynb    # Data types and result containers for the segment-align integration surface
 
-Total: 8 notebooks across 3 directories
+Total: 10 notebooks across 3 directories
 
 ## Module Dependencies
 
@@ -35,28 +37,38 @@ graph LR
     components_keyboard_config[components.keyboard_config<br/>keyboard_config]
     components_step_renderer[components.step_renderer<br/>step_combined]
     html_ids[html_ids<br/>html_ids]
+    models[models<br/>models]
     routes_chrome[routes.chrome<br/>chrome]
     routes_forced_alignment[routes.forced_alignment<br/>forced_alignment]
+    routes_init[routes.init<br/>routes/init]
     services_forced_alignment[services.forced_alignment<br/>forced_alignment]
 
     components_handlers --> services_forced_alignment
     components_handlers --> components_step_renderer
+    components_handlers --> routes_forced_alignment
     components_handlers --> html_ids
     components_handlers --> components_keyboard_config
-    components_handlers --> routes_forced_alignment
     components_keyboard_config --> html_ids
     components_step_renderer --> components_helpers
     components_step_renderer --> html_ids
     components_step_renderer --> components_keyboard_config
-    routes_chrome --> html_ids
-    routes_chrome --> components_keyboard_config
     routes_chrome --> components_handlers
+    routes_chrome --> html_ids
     routes_chrome --> components_step_renderer
+    routes_chrome --> components_keyboard_config
     routes_forced_alignment --> html_ids
     routes_forced_alignment --> components_step_renderer
+    routes_init --> routes_forced_alignment
+    routes_init --> components_handlers
+    routes_init --> components_keyboard_config
+    routes_init --> services_forced_alignment
+    routes_init --> html_ids
+    routes_init --> components_step_renderer
+    routes_init --> models
+    routes_init --> routes_chrome
 ```
 
-*15 cross-module dependencies detected*
+*23 cross-module dependencies detected*
 
 ## CLI Reference
 
@@ -588,6 +600,38 @@ class CombinedHtmlIds:
         "Convert an ID to a CSS selector format."
 ```
 
+### routes/init (`init.ipynb`)
+
+> Consolidated router assembly for the segment-align step
+
+#### Import
+
+``` python
+from cjm_transcript_segment_align.routes.init import (
+    init_segment_align_routers
+)
+```
+
+#### Functions
+
+``` python
+def _validate_alignment(
+    state:Dict[str, Any]  # Workflow state dictionary
+) -> bool:  # True if segments and VAD chunks are 1:1 aligned
+    "Validate 1:1 alignment between segments and VAD chunks."
+```
+
+``` python
+def init_segment_align_routers(
+    """
+    Initialize all segment-align routers and return result bundle.
+    
+    Internally creates services, initializes sub-library routers,
+    wires mutation wrappers, chrome switching, forced alignment,
+    and job monitor integration.
+    """
+```
+
 ### keyboard_config (`keyboard_config.ipynb`)
 
 > Shared keyboard navigation configuration for the combined Phase 2 step
@@ -598,6 +642,7 @@ class CombinedHtmlIds:
 from cjm_transcript_segment_align.components.keyboard_config import (
     DEBUG_KB_SYSTEM,
     ZONE_CHANGE_CALLBACK,
+    KB_SYSTEM_ID,
     SWITCH_CHROME_BTN_ID,
     render_keyboard_hints_collapsible,
     build_combined_kb_system,
@@ -636,7 +681,47 @@ def generate_zone_change_js(
 ``` python
 DEBUG_KB_SYSTEM = True
 ZONE_CHANGE_CALLBACK = 'onCombinedZoneChange'
+KB_SYSTEM_ID = 'sd-seg-align-kb'
 SWITCH_CHROME_BTN_ID = 'sd-switch-chrome-btn'
+```
+
+### models (`models.ipynb`)
+
+> Data types and result containers for the segment-align integration
+> surface
+
+#### Import
+
+``` python
+from cjm_transcript_segment_align.models import (
+    SegmentAlignUrls,
+    SegmentAlignResult
+)
+```
+
+#### Classes
+
+``` python
+@dataclass
+class SegmentAlignUrls:
+    "Combined URL bundle for host access."
+    
+    seg: SegmentationUrls  # Segmentation route URLs
+    align: AlignmentUrls  # Alignment route URLs
+    switch_chrome: str = ''  # Chrome switching URL
+    fa_toggle: str = ''  # FA toggle URL (empty if FA unavailable)
+```
+
+``` python
+@dataclass
+class SegmentAlignResult:
+    "Everything the host needs from init_segment_align_routers()."
+    
+    urls: SegmentAlignUrls  # Combined URL bundle
+    render_step: Callable  # fn(ctx: InteractionContext) -> FT
+    sse_headers: list = field(...)  # Headers for app (SSE extension)
+    fa_available: bool = False  # Whether forced alignment is available
+    validate_alignment: Callable  # fn(state: dict) -> bool
 ```
 
 ### step_combined (`step_renderer.ipynb`)
@@ -780,6 +865,7 @@ def render_combined_step(
     fa_toggle_url:str="",  # URL for forced alignment toggle route
     jm_overlay_el:Any=None,  # Job monitor overlay element (or placeholder)
     jm_modal_el:Any=None,  # Job monitor modal element (or placeholder)
+    jm_kb_script_el:Any=None,  # Job monitor keyboard script placeholder (for OOB pause/resume)
 ) -> Any:  # FastHTML component with full dual-column layout
     """
     Render Phase 2: Combined Segment & Align step with dual-column layout.

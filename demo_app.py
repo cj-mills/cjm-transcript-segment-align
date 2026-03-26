@@ -7,40 +7,22 @@ the full transcript workflow.
 Run with: python demo_app.py
 """
 
-from typing import List, Dict, Any, Callable
+from typing import List, Dict, Any
 from pathlib import Path
 import tempfile
 
-from fasthtml.common import (
-    fast_app, Div, H1, P, Span, Input, Button, Script,
-    APIRouter, FileResponse,
-)
+from fasthtml.common import fast_app, Div, APIRouter, FileResponse
 
 # DaisyUI components
 from cjm_fasthtml_daisyui.core.resources import get_daisyui_headers
 from cjm_fasthtml_daisyui.core.testing import create_theme_persistence_script
-from cjm_fasthtml_daisyui.components.data_display.badge import badge, badge_styles, badge_sizes
-from cjm_fasthtml_daisyui.utilities.semantic_colors import bg_dui, text_dui, border_dui
-from cjm_fasthtml_daisyui.utilities.border_radius import border_radius
-
-# Tailwind utilities
-from cjm_fasthtml_tailwind.utilities.spacing import p, m
-from cjm_fasthtml_tailwind.utilities.sizing import w, h, min_h, container, max_w
-from cjm_fasthtml_tailwind.utilities.typography import font_size, font_weight, uppercase, tracking
-from cjm_fasthtml_tailwind.utilities.layout import overflow, display_tw, position
-from cjm_fasthtml_tailwind.utilities.borders import border
-from cjm_fasthtml_tailwind.utilities.effects import ring
-from cjm_fasthtml_tailwind.utilities.transitions_and_animation import transition, duration
-from cjm_fasthtml_tailwind.utilities.flexbox_and_grid import (
-    flex_display, flex_direction, justify, items, gap, grow
-)
-from cjm_fasthtml_tailwind.core.base import combine_classes
 
 # App core
 from cjm_fasthtml_app_core.core.routing import register_routes
 from cjm_fasthtml_app_core.core.htmx import handle_htmx_request
 
 # Interactions library
+from cjm_fasthtml_interactions.core.context import InteractionContext
 from cjm_fasthtml_interactions.core.state_store import get_session_id
 
 # State store
@@ -51,46 +33,11 @@ from cjm_plugin_system.core.manager import PluginManager
 from cjm_plugin_system.core.scheduling import QueueScheduler
 from cjm_plugin_system.core.queue import JobQueue
 
-# Card stack library
-from cjm_fasthtml_card_stack.components.states import render_loading_state
-from cjm_fasthtml_card_stack.core.constants import DEFAULT_VISIBLE_COUNT, DEFAULT_CARD_WIDTH
-
-# Segmentation library
-from cjm_transcript_segmentation.models import SegmentationUrls
-from cjm_transcript_segmentation.services.segmentation import SegmentationService
-from cjm_transcript_segmentation.html_ids import SegmentationHtmlIds
-from cjm_transcript_segmentation.components.card_stack_config import SEG_CS_IDS
-from cjm_transcript_segmentation.routes.init import init_segmentation_routers
-
-# Alignment library
-from cjm_transcript_vad_align.models import AlignmentUrls
-from cjm_transcript_vad_align.services.alignment import AlignmentService
-from cjm_transcript_vad_align.html_ids import AlignmentHtmlIds
-from cjm_transcript_vad_align.components.card_stack_config import ALIGN_CS_IDS
-from cjm_transcript_vad_align.routes.init import init_alignment_routers
-
-# Job monitor library
-from cjm_fasthtml_job_monitor.services.monitor import JobMonitorService
-from cjm_fasthtml_job_monitor.routes.init import init_job_monitor_routes, check_inflight_job
-from cjm_fasthtml_job_monitor.models import JobMonitorConfig
+# SSE headers (always included — harmless if FA unavailable)
 from cjm_fasthtml_job_monitor.components.modal import get_sse_headers
-from cjm_fasthtml_lucide_icons.factory import lucide_icon
 
-# Combined library (this library)
-from cjm_transcript_segment_align.html_ids import CombinedHtmlIds
-from cjm_transcript_segment_align.components.handlers import (
-    create_seg_mutation_wrappers, build_fa_job_args, build_fa_on_complete,
-    create_seg_init_chrome_wrapper, create_align_init_chrome_wrapper,
-)
-from cjm_transcript_segment_align.components.step_renderer import (
-    render_alignment_status,
-)
-from cjm_transcript_segment_align.components.keyboard_config import SWITCH_CHROME_BTN_ID
-from cjm_transcript_segment_align.routes.chrome import init_chrome_router
-from cjm_transcript_segment_align.routes.forced_alignment import (
-    init_forced_alignment_routers,
-)
-from cjm_transcript_segment_align.services.forced_alignment import ForcedAlignmentService
+# Combined library (this library) — consolidated API
+from cjm_transcript_segment_align.routes.init import init_segment_align_routers
 
 
 # =============================================================================
@@ -147,235 +94,6 @@ class MockSourceService:
 
         info = self._source_map.get(record_id, {})
         return MockBlock(media_path=str(info.get("audio", "")))
-
-
-# =============================================================================
-# Demo Page Renderer
-# =============================================================================
-
-def render_demo_page(
-    seg_urls: SegmentationUrls,
-    align_urls: AlignmentUrls,
-    switch_chrome_url: str,
-    jm_overlay_el: Any = None,
-    jm_modal_el: Any = None,
-) -> Callable:
-    """Create the demo page content factory."""
-
-    def page_content():
-        """Render the demo page with dual-column layout."""
-
-        # --- Segmentation column ---
-        seg_header = Div(
-            Span(
-                "Text Segmentation",
-                cls=combine_classes(
-                    font_size.sm, font_weight.bold,
-                    uppercase, tracking.wide,
-                    text_dui.base_content.opacity(50)
-                )
-            ),
-            Span(
-                "--",
-                id=CombinedHtmlIds.SEG_MINI_STATS,
-                cls=combine_classes(badge, badge_styles.ghost, badge_sizes.sm)
-            ),
-            id=CombinedHtmlIds.SEG_COLUMN_HEADER,
-            cls=combine_classes(
-                flex_display, justify.between, items.center,
-                p(3), bg_dui.base_200,
-                border_dui.base_300, border.b()
-            )
-        )
-
-        seg_content = Div(
-            render_loading_state(SEG_CS_IDS, message="Initializing segments..."),
-            Div(
-                hx_post=seg_urls.init,
-                hx_trigger="load",
-                hx_target=f"#{CombinedHtmlIds.SEG_COLUMN_CONTENT}",
-                hx_swap="outerHTML"
-            ),
-            id=CombinedHtmlIds.SEG_COLUMN_CONTENT,
-            cls=combine_classes(grow(), overflow.hidden, flex_display, flex_direction.col, p(4))
-        )
-
-        seg_column_cls = combine_classes(
-            w.full, w('[60%]').lg,
-            min_h(0),
-            flex_display, flex_direction.col,
-            bg_dui.base_100, border_dui.base_300, border(1),
-            border_radius.box,
-            overflow.hidden,
-            transition.all, duration._200,
-            ring(1), "ring-primary",
-        )
-
-        seg_col = Div(seg_header, seg_content, id=CombinedHtmlIds.SEG_COLUMN, cls=seg_column_cls)
-
-        # --- Alignment column ---
-        align_header = Div(
-            Span(
-                "VAD Alignment",
-                cls=combine_classes(
-                    font_size.sm, font_weight.bold,
-                    uppercase, tracking.wide,
-                    text_dui.base_content.opacity(50)
-                )
-            ),
-            Span(
-                "--",
-                id=CombinedHtmlIds.ALIGNMENT_MINI_STATS,
-                cls=combine_classes(badge, badge_styles.ghost, badge_sizes.sm)
-            ),
-            id=CombinedHtmlIds.ALIGNMENT_COLUMN_HEADER,
-            cls=combine_classes(
-                flex_display, justify.between, items.center,
-                p(3), bg_dui.base_200,
-                border_dui.base_300, border.b()
-            )
-        )
-
-        align_content = Div(
-            render_loading_state(ALIGN_CS_IDS, message="Analyzing audio..."),
-            Div(
-                hx_post=align_urls.init,
-                hx_trigger="load",
-                hx_target=f"#{CombinedHtmlIds.ALIGNMENT_COLUMN_CONTENT}",
-                hx_swap="outerHTML"
-            ),
-            id=CombinedHtmlIds.ALIGNMENT_COLUMN_CONTENT,
-            cls=combine_classes(grow(), min_h(0), overflow.hidden, flex_display, flex_direction.col, p(4))
-        )
-
-        align_column_cls = combine_classes(
-            w.full, w('[40%]').lg,
-            min_h(0),
-            flex_display, flex_direction.col,
-            bg_dui.base_100, border_dui.base_300, border(1),
-            border_radius.box,
-            overflow.hidden,
-            transition.all, duration._200,
-            "opacity-70",
-        )
-
-        align_col = Div(align_header, align_content, id=CombinedHtmlIds.ALIGNMENT_COLUMN, cls=align_column_cls)
-
-        # --- Placeholder chrome ---
-        placeholder_cls = combine_classes(font_size.sm, text_dui.base_content.opacity(50))
-
-        hints = Div(
-            P("Keyboard hints will appear here after initialization.", cls=placeholder_cls),
-            id=CombinedHtmlIds.SHARED_HINTS,
-            cls=str(p(2))
-        )
-
-        toolbar = Div(
-            P("Toolbar actions will appear here after initialization.", cls=placeholder_cls),
-            id=CombinedHtmlIds.SHARED_TOOLBAR,
-            cls=str(p(2))
-        )
-
-        controls = Div(
-            P("Width controls will appear here after initialization.", cls=placeholder_cls),
-            id=CombinedHtmlIds.SHARED_CONTROLS,
-            cls=str(p(2))
-        )
-
-        footer = Div(
-            P("Footer will appear here after initialization.", cls=placeholder_cls),
-            id=CombinedHtmlIds.SHARED_FOOTER,
-            cls=combine_classes(
-                p(1), bg_dui.base_100,
-                border_dui.base_300, border.t(),
-                flex_display, justify.center, items.center
-            )
-        )
-
-        # Hidden active column input + KB system container
-        active_column_input = Input(
-            type="hidden",
-            id=CombinedHtmlIds.ACTIVE_COLUMN_INPUT,
-            name="active_column",
-            value="seg",
-        )
-        kb_container = Div(id=CombinedHtmlIds.KEYBOARD_SYSTEM)
-
-        # Hidden chrome switch button placeholder (populated by seg init OOB swap)
-        chrome_switch_btn = Button(
-            id=SWITCH_CHROME_BTN_ID,
-            cls=str(display_tw.hidden),
-            hx_post=switch_chrome_url,
-            hx_include=f"#{CombinedHtmlIds.ACTIVE_COLUMN_INPUT}",
-            hx_swap="none",
-        )
-
-        # Debug: catch OOB target errors
-        oob_debug = Script("""
-            document.body.addEventListener('htmx:oobErrorNoTarget', function(e) {
-                var id = e.detail.content ? e.detail.content.id : 'unknown';
-                console.error('[OOB ERROR] Missing target ID:', id, e.detail.content);
-            });
-        """)
-
-        return Div(
-            oob_debug,
-            # Header
-            Div(
-                H1("Segment & Align Demo",
-                   cls=combine_classes(font_size._3xl, font_weight.bold)),
-                P(
-                    "Dual-column text segmentation and VAD alignment with shared chrome and zone switching.",
-                    cls=combine_classes(text_dui.base_content.opacity(70), m.b(2))
-                ),
-            ),
-
-            # Shared chrome
-            hints,
-            toolbar,
-            controls,
-
-            # Dual-column content area (position:relative for job monitor overlay)
-            Div(
-                seg_col,
-                align_col,
-                jm_overlay_el,  # Job monitor overlay placeholder
-                id=CombinedHtmlIds.COLUMNS,
-                cls=combine_classes(
-                    position.relative,
-                    grow(),
-                    min_h(0),
-                    flex_display,
-                    flex_direction.col,
-                    flex_direction.row.lg,
-                    gap(4),
-                    overflow.hidden,
-                    p(1),
-                )
-            ),
-
-            # Footer
-            footer,
-
-            # Keyboard system container
-            kb_container,
-
-            # Hidden state + chrome switch button
-            active_column_input,
-            chrome_switch_btn,
-
-            # Job monitor modal (page-level)
-            jm_modal_el,
-
-            id="sa-demo-container",
-            cls=combine_classes(
-                w.full, h.full,
-                flex_display, flex_direction.col,
-                p(4), p.x(2), p.b(0)
-            )
-        )
-
-    return page_content
 
 
 # =============================================================================
@@ -442,22 +160,6 @@ def main():
     else:
         print(f"  {vad_plugin_name}: not found")
 
-    # -------------------------------------------------------------------------
-    # Create services — multi-source
-    # -------------------------------------------------------------------------
-    selected_sources = [
-        {"record_id": src["record_id"], "provider_id": "demo-provider"}
-        for src in TEST_SOURCES
-    ]
-    source_map = {
-        src["record_id"]: {"text": src["text"], "audio": src["audio"]}
-        for src in TEST_SOURCES
-    }
-
-    source_service = MockSourceService(source_map=source_map)
-    segmentation_service = SegmentationService(plugin_manager, nltk_plugin_name)
-    alignment_service = AlignmentService(plugin_manager, vad_plugin_name)
-
     # Load Qwen3 forced alignment plugin (optional)
     fa_plugin_name = "cjm-transcription-plugin-qwen3-forced-aligner"
     fa_meta = plugin_manager.get_discovered_meta(fa_plugin_name)
@@ -469,9 +171,6 @@ def main():
             print(f"  {fa_plugin_name}: error - {e}")
     else:
         print(f"  {fa_plugin_name}: not found (FA button will be hidden)")
-
-    fa_service = ForcedAlignmentService(plugin_manager, fa_plugin_name)
-    fa_is_available = fa_service.is_available()
 
     # System monitor (optional, for GPU stats in Resources tab)
     sysmon_name = "cjm-system-monitor-nvidia"
@@ -488,14 +187,22 @@ def main():
         print(f"  {sysmon_name}: not found (Resources tab will show CPU/RAM only)")
 
     # -------------------------------------------------------------------------
-    # Job queue + job monitor service
+    # Create mock source service — multi-source
+    # -------------------------------------------------------------------------
+    selected_sources = [
+        {"record_id": src["record_id"], "provider_id": "demo-provider"}
+        for src in TEST_SOURCES
+    ]
+    source_map = {
+        src["record_id"]: {"text": src["text"], "audio": src["audio"]}
+        for src in TEST_SOURCES
+    }
+    source_service = MockSourceService(source_map=source_map)
+
+    # -------------------------------------------------------------------------
+    # Job queue (host-owned)
     # -------------------------------------------------------------------------
     queue = JobQueue(plugin_manager)
-    monitor_service = JobMonitorService(
-        queue=queue,
-        manager=plugin_manager,
-        sysmon_plugin_name=sysmon_name if sysmon_available else None,
-    )
 
     # Initialize selection state + decomposition step state for job monitor
     def init_demo_state(sess):
@@ -534,204 +241,41 @@ def main():
     audio_src_url = audio_src.to()
 
     # -------------------------------------------------------------------------
-    # Set up segmentation routes (mutation wrappers created after FA routes)
+    # Initialize all segment-align routes (consolidated)
     # -------------------------------------------------------------------------
-    # Init segmentation routes without mutation wrappers (FA URLs needed first)
-    seg_routers, seg_urls, seg_routes = init_segmentation_routers(
+    sa_routers, sa_result = init_segment_align_routers(
         state_store=state_store,
         workflow_id=workflow_id,
+        prefix="",
         source_service=source_service,
-        segmentation_service=segmentation_service,
-        prefix="/seg",
-    )
-
-    # -------------------------------------------------------------------------
-    # Set up alignment routes
-    # -------------------------------------------------------------------------
-    align_routers, align_urls, align_routes = init_alignment_routers(
-        state_store=state_store,
-        workflow_id=workflow_id,
-        source_service=source_service,
-        alignment_service=alignment_service,
-        prefix="/align",
+        plugin_manager=plugin_manager,
+        job_queue=queue,
         audio_src_url=audio_src_url,
+        text_plugin=nltk_plugin_name,
+        vad_plugin=vad_plugin_name,
+        fa_plugin_name=fa_plugin_name,
+        sysmon_plugin_name=sysmon_name if sysmon_available else None,
+        max_history_depth=10,
     )
 
-    # -------------------------------------------------------------------------
-    # Set up FA toggle route (toggle only — trigger/progress handled by job monitor)
-    # -------------------------------------------------------------------------
-    fa_router, fa_routes = init_forced_alignment_routers(
-        state_store=state_store,
-        workflow_id=workflow_id,
-        seg_urls=seg_urls,
-        prefix="/fa",
-    )
-    fa_toggle_url = fa_routes["toggle"].to() if fa_is_available else ""
+    print(f"\n  FA available: {sa_result.fa_available}")
 
     # -------------------------------------------------------------------------
-    # Set up job monitor routes for FA (trigger, SSE progress, cancel)
+    # Page route — uses render_combined_step via sa_result.render_step
     # -------------------------------------------------------------------------
-    jm_router, jm_urls, jm_ids = init_job_monitor_routes(
-        monitor_service=monitor_service,
-        plugin_name=fa_plugin_name,
-        state_store=state_store,
-        workflow_id=workflow_id,
-        step_id="decomposition",
-        state_key="fa_job_seq",
-        prefix="/fa-monitor",
-        overlay_target_id=CombinedHtmlIds.COLUMNS,
-        kb_system_id=None,  # TODO: wire KB system_id for pause/resume
-        on_complete=build_fa_on_complete(
-            source_service=source_service,
-            seg_urls=seg_urls,
-            fa_toggle_url=fa_toggle_url,
-            fa_available=fa_is_available,
-            state_store=state_store,
-            workflow_id=workflow_id,
-        ) if fa_is_available else None,
-        job_args_builder=build_fa_job_args(source_service) if fa_is_available else None,
-        config=JobMonitorConfig(
-            modal_title="Force Alignment",
-            trigger_label="Force Align",
-            trigger_icon="audio-waveform",
-        ),
-        id_prefix="fa-jm",
-        icon_fn=lucide_icon,
-        restore_trigger_on_complete=False,  # on_complete handles toolbar (shows toggle)
-    )
-
-    # Get trigger element for FA toolbar slot
-    # The full jm_trigger_el includes its own slot div (id=fa-jm-trigger-slot).
-    # This is placed inside the FA toolbar slot (id=sd-fa-toolbar-slot),
-    # so the job monitor can OOB-swap fa-jm-trigger-slot on completion.
-    from cjm_fasthtml_job_monitor.components.trigger import render_job_trigger
-    from cjm_fasthtml_job_monitor.components.overlay import render_job_overlay_placeholder
-    jm_trigger_el = render_job_trigger(
-        JobMonitorConfig(trigger_label="Force Align", trigger_icon="audio-waveform"),
-        jm_ids, jm_urls, icon_fn=lucide_icon,
-    )
-
-    # -------------------------------------------------------------------------
-    # Set up chrome switching route (needs jm_trigger for toolbar extra_actions)
-    # -------------------------------------------------------------------------
-    chrome_router, chrome_routes = init_chrome_router(
-        state_store=state_store,
-        workflow_id=workflow_id,
-        seg_urls=seg_urls,
-        align_urls=align_urls,
-        prefix="/chrome",
-        jm_trigger=jm_trigger_el,
-        fa_toggle_url=fa_toggle_url,
-        fa_available=fa_is_available,
-    )
-    switch_chrome_url = chrome_routes["switch_chrome"].to()
-
-    # -------------------------------------------------------------------------
-    # Create mutation wrappers (now that job monitor trigger is known)
-    # -------------------------------------------------------------------------
-    wrapped_handlers = create_seg_mutation_wrappers(
-        jm_trigger=jm_trigger_el,
-        fa_toggle_url=fa_toggle_url,
-        fa_available=fa_is_available,
-    )
-
-    # Override mutation routes with wrapped versions
-    seg_mutation_router = APIRouter(prefix="/seg/workflow")
-
-    @seg_mutation_router
-    async def split(request, sess, segment_index: int):
-        return await wrapped_handlers["split"](
-            state_store, workflow_id, request, sess, segment_index,
-            urls=seg_urls, max_history_depth=10,
-        )
-
-    @seg_mutation_router
-    async def merge(request, sess, segment_index: int):
-        return await wrapped_handlers["merge"](
-            state_store, workflow_id, request, sess, segment_index,
-            urls=seg_urls, max_history_depth=10,
-        )
-
-    @seg_mutation_router
-    async def undo(request, sess):
-        return await wrapped_handlers["undo"](
-            state_store, workflow_id, request, sess, urls=seg_urls,
-        )
-
-    @seg_mutation_router
-    async def reset(request, sess):
-        return await wrapped_handlers["reset"](
-            state_store, workflow_id, request, sess,
-            urls=seg_urls, max_history_depth=10,
-        )
-
-    @seg_mutation_router
-    async def ai_split(request, sess):
-        return await wrapped_handlers["ai_split"](
-            state_store, workflow_id, segmentation_service, request, sess,
-            urls=seg_urls, max_history_depth=10,
-        )
-
-    # -------------------------------------------------------------------------
-    # Override init routes with combined wrappers
-    # -------------------------------------------------------------------------
-    # Seg init wrapper (builds combined KB system + shared chrome)
-    wrapped_seg_init_fn = create_seg_init_chrome_wrapper(
-        align_urls=align_urls,
-        switch_chrome_url=switch_chrome_url,
-        jm_trigger=jm_trigger_el,
-        fa_toggle_url=fa_toggle_url,
-        fa_available=fa_is_available,
-    )
-
-    seg_init_router = APIRouter(prefix="/seg/workflow")
-
-    @seg_init_router
-    async def init(request, sess):
-        """Initialize segments with combined KB system."""
-        init_demo_state(sess)
-        return await wrapped_seg_init_fn(
-            state_store, workflow_id, source_service, segmentation_service,
-            request, sess, urls=seg_urls,
-        )
-
-    # Align init wrapper (adds mini-stats + alignment status)
-    wrapped_align_init_fn = create_align_init_chrome_wrapper()
-
-    align_init_router = APIRouter(prefix="/align/workflow")
-
-    @align_init_router
-    async def init(request, sess):
-        """Initialize alignment with mini-stats and status."""
-        init_demo_state(sess)
-        return await wrapped_align_init_fn(
-            state_store, workflow_id, source_service, alignment_service,
-            request, sess, urls=align_urls,
-        )
-
-    # -------------------------------------------------------------------------
-    # Page routes
-    # -------------------------------------------------------------------------
-    page_content = render_demo_page(
-        seg_urls, align_urls, switch_chrome_url,
-        jm_overlay_el=render_job_overlay_placeholder(jm_ids),
-        jm_modal_el=Div(id=jm_ids.modal),
-    )
-
     @router
     def index(request, sess):
         """Demo homepage."""
         init_demo_state(sess)
-        return handle_htmx_request(request, page_content)
+        session_id = get_session_id(sess)
+        workflow_state = state_store.get_state(workflow_id, session_id)
+        ctx = InteractionContext(state=workflow_state, session=sess)
+        return handle_htmx_request(request, sa_result.render_step(ctx))
 
     # -------------------------------------------------------------------------
     # Register routes
     # -------------------------------------------------------------------------
-    register_routes(
-        app, router, audio_router, chrome_router, fa_router, jm_router,
-        seg_mutation_router, seg_init_router, align_init_router,
-        *seg_routers, *align_routers,
-    )
+    register_routes(app, router, audio_router, *sa_routers)
 
     # -------------------------------------------------------------------------
     # Job queue lifecycle

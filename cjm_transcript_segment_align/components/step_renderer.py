@@ -433,6 +433,7 @@ def render_combined_step(
     fa_toggle_url:str="",  # URL for forced alignment toggle route
     jm_overlay_el:Any=None,  # Job monitor overlay element (or placeholder)
     jm_modal_el:Any=None,  # Job monitor modal element (or placeholder)
+    jm_kb_script_el:Any=None,  # Job monitor keyboard script placeholder (for OOB pause/resume)
 ) -> Any:  # FastHTML component with full dual-column layout
     """Render Phase 2: Combined Segment & Align step with dual-column layout.
     
@@ -607,6 +608,7 @@ def render_combined_step(
         chrome_switch_btn,
         active_column_input,
         jm_modal_el,  # Job monitor modal (page-level, outside columns)
+        jm_kb_script_el,  # Job monitor keyboard script placeholder (for OOB pause/resume)
         id=SegmentationHtmlIds.SEG_CONTAINER,
         cls=combine_classes(
             w.full, h.full,
