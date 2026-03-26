@@ -27,7 +27,7 @@ from cjm_fasthtml_daisyui.utilities.border_radius import border_radius
 from cjm_fasthtml_tailwind.utilities.spacing import p, m
 from cjm_fasthtml_tailwind.utilities.sizing import w, h, min_h, container, max_w
 from cjm_fasthtml_tailwind.utilities.typography import font_size, font_weight, uppercase, tracking
-from cjm_fasthtml_tailwind.utilities.layout import overflow, display_tw
+from cjm_fasthtml_tailwind.utilities.layout import overflow, display_tw, position
 from cjm_fasthtml_tailwind.utilities.borders import border
 from cjm_fasthtml_tailwind.utilities.effects import ring
 from cjm_fasthtml_tailwind.utilities.transitions_and_animation import transition, duration
@@ -48,7 +48,8 @@ from cjm_workflow_state.state_store import SQLiteWorkflowStateStore
 
 # Plugin system
 from cjm_plugin_system.core.manager import PluginManager
-from cjm_plugin_system.core.scheduling import SafetyScheduler
+from cjm_plugin_system.core.scheduling import QueueScheduler
+from cjm_plugin_system.core.queue import JobQueue
 
 # Card stack library
 from cjm_fasthtml_card_stack.components.states import render_loading_state
@@ -68,10 +69,17 @@ from cjm_transcript_vad_align.html_ids import AlignmentHtmlIds
 from cjm_transcript_vad_align.components.card_stack_config import ALIGN_CS_IDS
 from cjm_transcript_vad_align.routes.init import init_alignment_routers
 
+# Job monitor library
+from cjm_fasthtml_job_monitor.services.monitor import JobMonitorService
+from cjm_fasthtml_job_monitor.routes.init import init_job_monitor_routes, check_inflight_job
+from cjm_fasthtml_job_monitor.models import JobMonitorConfig
+from cjm_fasthtml_job_monitor.components.modal import get_sse_headers
+from cjm_fasthtml_lucide_icons.factory import lucide_icon
+
 # Combined library (this library)
 from cjm_transcript_segment_align.html_ids import CombinedHtmlIds
 from cjm_transcript_segment_align.components.handlers import (
-    create_seg_mutation_wrappers,
+    create_seg_mutation_wrappers, build_fa_job_args, build_fa_on_complete,
     create_seg_init_chrome_wrapper, create_align_init_chrome_wrapper,
 )
 from cjm_transcript_segment_align.components.step_renderer import (
@@ -86,13 +94,25 @@ from cjm_transcript_segment_align.services.forced_alignment import ForcedAlignme
 
 
 # =============================================================================
-# Test Audio Files
+# Test Audio Files — two sources for multi-source FA testing
 # =============================================================================
 
 TEST_FILES_DIR = Path(__file__).parent / "test_files"
-TEST_AUDIO_PATH = TEST_FILES_DIR / "short_test_audio.mp3"
 
-SAMPLE_TEXT = (TEST_FILES_DIR / "short_test_audio.txt").read_text().strip() if (TEST_FILES_DIR / "short_test_audio.txt").exists() else "Sample text for segmentation demo."
+TEST_SOURCES = [
+    {
+        "record_id": "demo-source-0",
+        "audio": TEST_FILES_DIR / "short_test_audio.mp3",
+        "text": (TEST_FILES_DIR / "short_test_audio.txt").read_text().strip(),
+    },
+    {
+        "record_id": "demo-source-1",
+        "audio": TEST_FILES_DIR / "02 - 1. Laying Plans.mp3",
+        "text": (TEST_FILES_DIR / "02 - 1. Laying Plans.txt").read_text().strip(),
+    },
+]
+
+TEST_AUDIO_PATH = TEST_SOURCES[0]["audio"]  # First source for audio serving fallback
 
 
 # =============================================================================
@@ -102,18 +122,17 @@ SAMPLE_TEXT = (TEST_FILES_DIR / "short_test_audio.txt").read_text().strip() if (
 class MockSourceService:
     """Mock source service that provides both text and audio path mapping."""
 
-    def __init__(self, text_blocks: List[Dict], path_map: Dict[str, str]):
-        self._text_blocks = text_blocks
-        self._path_map = path_map
+    def __init__(self, source_map: Dict[str, Dict]):
+        self._source_map = source_map  # record_id -> {"text": ..., "audio": ...}
 
     def get_source_blocks(self, selected_sources: List[Dict]) -> List[Any]:
-        """Return sample text as source blocks."""
+        """Return source blocks with text from the source map."""
         from cjm_source_provider.models import SourceBlock
         return [
             SourceBlock(
                 id=src["record_id"],
                 provider_id=src["provider_id"],
-                text=SAMPLE_TEXT,
+                text=self._source_map[src["record_id"]]["text"],
             )
             for src in selected_sources
         ]
@@ -126,8 +145,8 @@ class MockSourceService:
         class MockBlock:
             media_path: str
 
-        path = self._path_map.get(record_id, "")
-        return MockBlock(media_path=path)
+        info = self._source_map.get(record_id, {})
+        return MockBlock(media_path=str(info.get("audio", "")))
 
 
 # =============================================================================
@@ -138,6 +157,8 @@ def render_demo_page(
     seg_urls: SegmentationUrls,
     align_urls: AlignmentUrls,
     switch_chrome_url: str,
+    jm_overlay_el: Any = None,
+    jm_modal_el: Any = None,
 ) -> Callable:
     """Create the demo page content factory."""
 
@@ -314,11 +335,14 @@ def render_demo_page(
             toolbar,
             controls,
 
-            # Dual-column content area
+            # Dual-column content area (position:relative for job monitor overlay)
             Div(
                 seg_col,
                 align_col,
+                jm_overlay_el,  # Job monitor overlay placeholder
+                id=CombinedHtmlIds.COLUMNS,
                 cls=combine_classes(
+                    position.relative,
                     grow(),
                     min_h(0),
                     flex_display,
@@ -339,6 +363,9 @@ def render_demo_page(
             # Hidden state + chrome switch button
             active_column_input,
             chrome_switch_btn,
+
+            # Job monitor modal (page-level)
+            jm_modal_el,
 
             id="sa-demo-container",
             cls=combine_classes(
@@ -364,7 +391,7 @@ def main():
     # Initialize FastHTML app
     app, rt = fast_app(
         pico=False,
-        hdrs=[*get_daisyui_headers(), create_theme_persistence_script()],
+        hdrs=[*get_daisyui_headers(), create_theme_persistence_script(), *get_sse_headers()],
         title="Segment & Align Demo",
         htmlkw={'data-theme': 'light'},
         secret_key="demo-secret-key"
@@ -388,7 +415,7 @@ def main():
     # Set up plugin manager and load plugins
     # -------------------------------------------------------------------------
     print("\n[Plugin System]")
-    plugin_manager = PluginManager(scheduler=SafetyScheduler())
+    plugin_manager = PluginManager(scheduler=QueueScheduler())
     plugin_manager.discover_manifests()
 
     # Load NLTK plugin (segmentation)
@@ -416,18 +443,18 @@ def main():
         print(f"  {vad_plugin_name}: not found")
 
     # -------------------------------------------------------------------------
-    # Create services
+    # Create services — multi-source
     # -------------------------------------------------------------------------
-    # Map demo source to test audio file
     selected_sources = [
-        {"record_id": "demo-source-0", "provider_id": "demo-provider"},
+        {"record_id": src["record_id"], "provider_id": "demo-provider"}
+        for src in TEST_SOURCES
     ]
-    path_map = {"demo-source-0": str(TEST_AUDIO_PATH)}
+    source_map = {
+        src["record_id"]: {"text": src["text"], "audio": src["audio"]}
+        for src in TEST_SOURCES
+    }
 
-    source_service = MockSourceService(
-        text_blocks=[{"id": "demo-source-0", "text": SAMPLE_TEXT}],
-        path_map=path_map,
-    )
+    source_service = MockSourceService(source_map=source_map)
     segmentation_service = SegmentationService(plugin_manager, nltk_plugin_name)
     alignment_service = AlignmentService(plugin_manager, vad_plugin_name)
 
@@ -446,17 +473,47 @@ def main():
     fa_service = ForcedAlignmentService(plugin_manager, fa_plugin_name)
     fa_is_available = fa_service.is_available()
 
-    # Initialize selection state
+    # System monitor (optional, for GPU stats in Resources tab)
+    sysmon_name = "cjm-system-monitor-nvidia"
+    sysmon_meta = plugin_manager.get_discovered_meta(sysmon_name)
+    sysmon_available = False
+    if sysmon_meta:
+        try:
+            success = plugin_manager.load_plugin(sysmon_meta)
+            sysmon_available = success
+            print(f"  {sysmon_name}: {'loaded' if success else 'failed'}")
+        except Exception as e:
+            print(f"  {sysmon_name}: error - {e}")
+    else:
+        print(f"  {sysmon_name}: not found (Resources tab will show CPU/RAM only)")
+
+    # -------------------------------------------------------------------------
+    # Job queue + job monitor service
+    # -------------------------------------------------------------------------
+    queue = JobQueue(plugin_manager)
+    monitor_service = JobMonitorService(
+        queue=queue,
+        manager=plugin_manager,
+        sysmon_plugin_name=sysmon_name if sysmon_available else None,
+    )
+
+    # Initialize selection state + decomposition step state for job monitor
     def init_demo_state(sess):
         """Ensure demo state is initialized for session."""
         session_id = get_session_id(sess)
         workflow_state = state_store.get_state(workflow_id, session_id)
         if "step_states" not in workflow_state:
             workflow_state["step_states"] = {}
+        changed = False
         if "selection" not in workflow_state["step_states"]:
             workflow_state["step_states"]["selection"] = {
                 "selected_sources": selected_sources
             }
+            changed = True
+        if "decomposition" not in workflow_state["step_states"]:
+            workflow_state["step_states"]["decomposition"] = {}
+            changed = True
+        if changed:
             state_store.update_state(workflow_id, session_id, workflow_state)
 
     # -------------------------------------------------------------------------
@@ -501,21 +558,61 @@ def main():
     )
 
     # -------------------------------------------------------------------------
-    # Set up forced alignment routes (before chrome — chrome needs FA URLs)
+    # Set up FA toggle route (toggle only — trigger/progress handled by job monitor)
     # -------------------------------------------------------------------------
     fa_router, fa_routes = init_forced_alignment_routers(
         state_store=state_store,
         workflow_id=workflow_id,
-        fa_service=fa_service,
-        source_service=source_service,
         seg_urls=seg_urls,
         prefix="/fa",
     )
-    fa_trigger_url = fa_routes["trigger"].to() if fa_is_available else ""
     fa_toggle_url = fa_routes["toggle"].to() if fa_is_available else ""
 
     # -------------------------------------------------------------------------
-    # Set up chrome switching route (needs FA URLs for toolbar extra_actions)
+    # Set up job monitor routes for FA (trigger, SSE progress, cancel)
+    # -------------------------------------------------------------------------
+    jm_router, jm_urls, jm_ids = init_job_monitor_routes(
+        monitor_service=monitor_service,
+        plugin_name=fa_plugin_name,
+        state_store=state_store,
+        workflow_id=workflow_id,
+        step_id="decomposition",
+        state_key="fa_job_seq",
+        prefix="/fa-monitor",
+        overlay_target_id=CombinedHtmlIds.COLUMNS,
+        kb_system_id=None,  # TODO: wire KB system_id for pause/resume
+        on_complete=build_fa_on_complete(
+            source_service=source_service,
+            seg_urls=seg_urls,
+            fa_toggle_url=fa_toggle_url,
+            fa_available=fa_is_available,
+            state_store=state_store,
+            workflow_id=workflow_id,
+        ) if fa_is_available else None,
+        job_args_builder=build_fa_job_args(source_service) if fa_is_available else None,
+        config=JobMonitorConfig(
+            modal_title="Force Alignment",
+            trigger_label="Force Align",
+            trigger_icon="audio-waveform",
+        ),
+        id_prefix="fa-jm",
+        icon_fn=lucide_icon,
+        restore_trigger_on_complete=False,  # on_complete handles toolbar (shows toggle)
+    )
+
+    # Get trigger element for FA toolbar slot
+    # The full jm_trigger_el includes its own slot div (id=fa-jm-trigger-slot).
+    # This is placed inside the FA toolbar slot (id=sd-fa-toolbar-slot),
+    # so the job monitor can OOB-swap fa-jm-trigger-slot on completion.
+    from cjm_fasthtml_job_monitor.components.trigger import render_job_trigger
+    from cjm_fasthtml_job_monitor.components.overlay import render_job_overlay_placeholder
+    jm_trigger_el = render_job_trigger(
+        JobMonitorConfig(trigger_label="Force Align", trigger_icon="audio-waveform"),
+        jm_ids, jm_urls, icon_fn=lucide_icon,
+    )
+
+    # -------------------------------------------------------------------------
+    # Set up chrome switching route (needs jm_trigger for toolbar extra_actions)
     # -------------------------------------------------------------------------
     chrome_router, chrome_routes = init_chrome_router(
         state_store=state_store,
@@ -523,17 +620,17 @@ def main():
         seg_urls=seg_urls,
         align_urls=align_urls,
         prefix="/chrome",
-        fa_trigger_url=fa_trigger_url,
+        jm_trigger=jm_trigger_el,
         fa_toggle_url=fa_toggle_url,
         fa_available=fa_is_available,
     )
     switch_chrome_url = chrome_routes["switch_chrome"].to()
 
     # -------------------------------------------------------------------------
-    # Create mutation wrappers (now that FA URLs are known)
+    # Create mutation wrappers (now that job monitor trigger is known)
     # -------------------------------------------------------------------------
     wrapped_handlers = create_seg_mutation_wrappers(
-        fa_trigger_url=fa_trigger_url,
+        jm_trigger=jm_trigger_el,
         fa_toggle_url=fa_toggle_url,
         fa_available=fa_is_available,
     )
@@ -582,7 +679,7 @@ def main():
     wrapped_seg_init_fn = create_seg_init_chrome_wrapper(
         align_urls=align_urls,
         switch_chrome_url=switch_chrome_url,
-        fa_trigger_url=fa_trigger_url,
+        jm_trigger=jm_trigger_el,
         fa_toggle_url=fa_toggle_url,
         fa_available=fa_is_available,
     )
@@ -615,7 +712,11 @@ def main():
     # -------------------------------------------------------------------------
     # Page routes
     # -------------------------------------------------------------------------
-    page_content = render_demo_page(seg_urls, align_urls, switch_chrome_url)
+    page_content = render_demo_page(
+        seg_urls, align_urls, switch_chrome_url,
+        jm_overlay_el=render_job_overlay_placeholder(jm_ids),
+        jm_modal_el=Div(id=jm_ids.modal),
+    )
 
     @router
     def index(request, sess):
@@ -627,10 +728,24 @@ def main():
     # Register routes
     # -------------------------------------------------------------------------
     register_routes(
-        app, router, audio_router, chrome_router, fa_router,
+        app, router, audio_router, chrome_router, fa_router, jm_router,
         seg_mutation_router, seg_init_router, align_init_router,
         *seg_routers, *align_routers,
     )
+
+    # -------------------------------------------------------------------------
+    # Job queue lifecycle
+    # -------------------------------------------------------------------------
+    @app.on_event("startup")
+    async def on_startup():
+        await queue.start()
+        print("Job queue started")
+
+    @app.on_event("shutdown")
+    async def on_shutdown():
+        await queue.stop()
+        plugin_manager.unload_all()
+        print("Job queue stopped, plugins unloaded")
 
     # Debug output
     print("\n" + "=" * 70)

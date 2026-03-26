@@ -37,11 +37,14 @@ class CombinedHtmlIds:
     ALIGNMENT_COLUMN_CONTENT = "sd-align-column-content"
     ALIGNMENT_MINI_STATS = "sd-align-mini-stats"
 
+    # Dual-Column Container (job monitor overlay target)
+    COLUMNS = "sd-columns"
+
     # State Tracking
     ACTIVE_COLUMN_INPUT = "sd-active-column"
 
     # Keyboard System (stable container)
     KEYBOARD_SYSTEM = "sd-keyboard-system"
 
-    # Forced Alignment (toolbar slot for progress polling target)
+    # Forced Alignment (toolbar slot)
     FA_TOOLBAR_SLOT = "sd-fa-toolbar-slot"

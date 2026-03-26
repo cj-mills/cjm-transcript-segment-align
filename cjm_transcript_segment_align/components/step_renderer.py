@@ -429,10 +429,16 @@ def render_combined_step(
     align_urls:AlignmentUrls=None,  # URL bundle for alignment routes
     switch_chrome_url:str="",  # URL for chrome switching route
     fa_available:bool=False,  # Whether forced alignment plugin is available
-    fa_trigger_url:str="",  # URL for forced alignment trigger route
+    jm_trigger:Any=None,  # Pre-rendered job monitor trigger element (or None)
     fa_toggle_url:str="",  # URL for forced alignment toggle route
+    jm_overlay_el:Any=None,  # Job monitor overlay element (or placeholder)
+    jm_modal_el:Any=None,  # Job monitor modal element (or placeholder)
 ) -> Any:  # FastHTML component with full dual-column layout
-    """Render Phase 2: Combined Segment & Align step with dual-column layout."""
+    """Render Phase 2: Combined Segment & Align step with dual-column layout.
+    
+    The dual-column container has position:relative for the job monitor overlay,
+    and a stable ID (CombinedHtmlIds.COLUMNS) for overlay targeting.
+    """
     from cjm_transcript_segment_align.components.handlers import (
         build_fa_extra_actions, segments_match_presplit,
     )
@@ -458,7 +464,7 @@ def render_combined_step(
     nltk_disabled = False
     if is_seg_init:
         fa_extra = build_fa_extra_actions(
-            seg_state, fa_trigger_url, fa_toggle_url, fa_available,
+            seg_state, jm_trigger, fa_toggle_url, fa_available,
         )
         nltk_presplit = seg_state.get("nltk_presplit", [])
         nltk_disabled = segments_match_presplit(
@@ -569,6 +575,11 @@ def render_combined_step(
             hx_swap="none",
         )
 
+    # Dual-column container with position:relative for job monitor overlay
+    columns_children = [seg_col, align_col]
+    if jm_overlay_el is not None:
+        columns_children.append(jm_overlay_el)
+
     return Div(
         Div(
             H2("Segment & Align", cls=combine_classes(font_size._3xl, font_weight.bold)),
@@ -581,9 +592,10 @@ def render_combined_step(
         toolbar,
         controls,
         Div(
-            seg_col,
-            align_col,
+            *columns_children,
+            id=CombinedHtmlIds.COLUMNS,
             cls=combine_classes(
+                position.relative,  # For job monitor overlay positioning
                 grow(), min_h(0),
                 flex_display, flex_direction.col, flex_direction.row.lg,
                 gap(4), overflow.hidden, p(1),
@@ -594,6 +606,7 @@ def render_combined_step(
         zone_change_js,
         chrome_switch_btn,
         active_column_input,
+        jm_modal_el,  # Job monitor modal (page-level, outside columns)
         id=SegmentationHtmlIds.SEG_CONTAINER,
         cls=combine_classes(
             w.full, h.full,

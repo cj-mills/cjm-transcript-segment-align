@@ -61,7 +61,7 @@ async def _handle_switch_chrome(
     sess,  # FastHTML session object
     seg_urls:SegmentationUrls,  # URL bundle for segmentation routes
     align_urls:AlignmentUrls,  # URL bundle for alignment routes
-    fa_trigger_url:str="",  # URL for FA trigger route
+    jm_trigger=None,  # Pre-rendered job monitor trigger element
     fa_toggle_url:str="",  # URL for FA toggle route
     fa_available:bool=False,  # Whether FA plugin is available
 ) -> tuple:  # OOB swaps for shared chrome containers
@@ -96,7 +96,7 @@ async def _handle_switch_chrome(
 
         # Build FA extra_actions and NLTK Split disabled state
         fa_extra = build_fa_extra_actions(
-            seg_state, fa_trigger_url, fa_toggle_url, fa_available,
+            seg_state, jm_trigger, fa_toggle_url, fa_available,
         )
         nltk_presplit = seg_state.get("nltk_presplit", [])
         nltk_disabled = segments_match_presplit(
@@ -166,7 +166,7 @@ def init_chrome_router(
     seg_urls: SegmentationUrls,  # URL bundle for segmentation routes
     align_urls: AlignmentUrls,  # URL bundle for alignment routes
     prefix: str,  # Route prefix (e.g., "/workflow/core/chrome")
-    fa_trigger_url: str = "",  # URL for FA trigger route
+    jm_trigger = None,  # Pre-rendered job monitor trigger element
     fa_toggle_url: str = "",  # URL for FA toggle route
     fa_available: bool = False,  # Whether FA plugin is available
 ) -> Tuple[APIRouter, Dict[str, Callable]]:  # (router, route_dict)
@@ -180,7 +180,7 @@ def init_chrome_router(
             state_store, workflow_id, request, sess,
             seg_urls=seg_urls,
             align_urls=align_urls,
-            fa_trigger_url=fa_trigger_url,
+            jm_trigger=jm_trigger,
             fa_toggle_url=fa_toggle_url,
             fa_available=fa_available,
         )

@@ -19,7 +19,7 @@ pip install cjm_transcript_segment_align
     │   └── step_renderer.ipynb    # Phase 2 combined step renderer: dual-column layout for Segment & Align
     ├── routes/ (2)
     │   ├── chrome.ipynb            # Shared chrome switching route handlers for the combined Phase 2 step
-    │   └── forced_alignment.ipynb  # Routes for triggering forced alignment, polling progress, and toggling between NLTK and force-aligned pre-splits
+    │   └── forced_alignment.ipynb  # Routes for toggling between NLTK and force-aligned pre-splits, plus rendering helpers for FA UI controls. Trigger and progress are handled by `cjm-fasthtml-job-monitor`.
     ├── services/ (1)
     │   └── forced_alignment.ipynb  # Forced alignment service for audio-informed text pre-splitting via forced alignment plugin
     └── html_ids.ipynb  # HTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome
@@ -39,21 +39,21 @@ graph LR
     routes_forced_alignment[routes.forced_alignment<br/>forced_alignment]
     services_forced_alignment[services.forced_alignment<br/>forced_alignment]
 
+    components_handlers --> services_forced_alignment
     components_handlers --> components_step_renderer
     components_handlers --> html_ids
     components_handlers --> components_keyboard_config
     components_handlers --> routes_forced_alignment
     components_keyboard_config --> html_ids
+    components_step_renderer --> components_helpers
     components_step_renderer --> html_ids
     components_step_renderer --> components_keyboard_config
-    components_step_renderer --> components_helpers
-    routes_chrome --> components_handlers
     routes_chrome --> html_ids
     routes_chrome --> components_keyboard_config
+    routes_chrome --> components_handlers
     routes_chrome --> components_step_renderer
-    routes_forced_alignment --> components_step_renderer
     routes_forced_alignment --> html_ids
-    routes_forced_alignment --> services_forced_alignment
+    routes_forced_alignment --> components_step_renderer
 ```
 
 *15 cross-module dependencies detected*
@@ -89,7 +89,7 @@ async def _handle_switch_chrome(
     sess,  # FastHTML session object
     seg_urls:SegmentationUrls,  # URL bundle for segmentation routes
     align_urls:AlignmentUrls,  # URL bundle for alignment routes
-    fa_trigger_url:str="",  # URL for FA trigger route
+    jm_trigger=None,  # Pre-rendered job monitor trigger element
     fa_toggle_url:str="",  # URL for FA toggle route
     fa_available:bool=False,  # Whether FA plugin is available
 ) -> tuple:  # OOB swaps for shared chrome containers
@@ -103,7 +103,7 @@ def init_chrome_router(
     seg_urls: SegmentationUrls,  # URL bundle for segmentation routes
     align_urls: AlignmentUrls,  # URL bundle for alignment routes
     prefix: str,  # Route prefix (e.g., "/workflow/core/chrome")
-    fa_trigger_url: str = "",  # URL for FA trigger route
+    jm_trigger = None,  # Pre-rendered job monitor trigger element
     fa_toggle_url: str = "",  # URL for FA toggle route
     fa_available: bool = False,  # Whether FA plugin is available
 ) -> Tuple[APIRouter, Dict[str, Callable]]:  # (router, route_dict)
@@ -118,16 +118,15 @@ DEBUG_SWITCH_CHROME = False
 
 ### forced_alignment (`forced_alignment.ipynb`)
 
-> Routes for triggering forced alignment, polling progress, and toggling
-> between NLTK and force-aligned pre-splits
+> Routes for toggling between NLTK and force-aligned pre-splits, plus
+> rendering helpers for FA UI controls. Trigger and progress are handled
+> by `cjm-fasthtml-job-monitor`.
 
 #### Import
 
 ``` python
 from cjm_transcript_segment_align.routes.forced_alignment import (
     FA_SLOT_ID,
-    render_fa_trigger_button,
-    render_fa_progress,
     render_fa_toggle,
     init_forced_alignment_routers
 )
@@ -136,42 +135,11 @@ from cjm_transcript_segment_align.routes.forced_alignment import (
 #### Functions
 
 ``` python
-def render_fa_trigger_button(
-    trigger_url: str,  # URL for forced alignment trigger route
-    disabled: bool = False,  # Whether button is disabled
-) -> Any:  # Force Align trigger button
-    "Render the Force Align trigger button."
-```
-
-``` python
-def render_fa_progress(
-    progress_val: float,  # Progress value 0.0-1.0
-    message: str,  # Progress stage message
-    progress_url: str,  # URL for progress polling
-) -> Any:  # Progress indicator with polling
-    "Render forced alignment progress indicator with HTMX polling."
-```
-
-``` python
 def render_fa_toggle(
     active_presplit: str,  # "nltk" or "forced_alignment"
     toggle_url: str,  # URL for toggle route
 ) -> Any:  # Toggle button group
     "Render the NLTK / Force Aligned toggle button group."
-```
-
-``` python
-async def _handle_fa_trigger(
-    state_store: SQLiteWorkflowStateStore,
-    workflow_id: str,
-    fa_service: ForcedAlignmentService,
-    source_service: SourceService,
-    request: Any,
-    sess: Any,
-    seg_urls: SegmentationUrls,
-    toggle_url: str,
-) -> Any:  # Targeted OOB updates (slots + stats + toolbar with toggle + alignment status + mini-stats)
-    "Trigger forced alignment and replace working segments with FA splits."
 ```
 
 ``` python
@@ -195,12 +163,15 @@ async def _handle_fa_toggle(
 def init_forced_alignment_routers(
     state_store: SQLiteWorkflowStateStore,  # State store instance
     workflow_id: str,  # Workflow identifier
-    fa_service: ForcedAlignmentService,  # Forced alignment service
-    source_service: SourceService,  # Source service for audio paths/text
     seg_urls: SegmentationUrls,  # Segmentation URL bundle
     prefix: str,  # Route prefix (e.g., "/fa")
 ) -> Tuple[APIRouter, Dict[str, Callable]]:  # (router, route_dict)
-    "Initialize forced alignment routes."
+    """
+    Initialize forced alignment routes (toggle only).
+    
+    Trigger and progress are handled by `cjm-fasthtml-job-monitor`.
+    This router provides the domain-specific toggle between NLTK/FA pre-splits.
+    """
 ```
 
 #### Variables
@@ -356,6 +327,8 @@ _PUNCT_RE
 from cjm_transcript_segment_align.components.handlers import (
     segments_match_presplit,
     build_fa_extra_actions,
+    build_fa_job_args,
+    build_fa_on_complete,
     create_seg_mutation_wrapper,
     wrap_align_mutation_handler,
     create_seg_init_chrome_wrapper,
@@ -384,7 +357,7 @@ def segments_match_presplit(
 ``` python
 def build_fa_extra_actions(
     seg_state: dict,  # Segmentation step state dict
-    fa_trigger_url: str = "",  # URL for FA trigger route
+    jm_trigger: Any = None,  # Pre-rendered job monitor trigger element (or None)
     fa_toggle_url: str = "",  # URL for FA toggle route
     fa_available: bool = False,  # Whether FA plugin is available
 ) -> Any:  # FA controls wrapped in slot div (or None)
@@ -392,14 +365,46 @@ def build_fa_extra_actions(
     Build FA controls for the toolbar extra_actions slot.
     
     Shows toggle when current segments match either pre-split snapshot.
-    Shows trigger button when FA pre-split doesn't exist or current doesn't match either.
+    Shows job monitor trigger when FA pre-split doesn't exist or current doesn't match either.
+    `jm_trigger` is the pre-rendered trigger element from `check_inflight_job` or `render_job_trigger`.
+    """
+```
+
+``` python
+def build_fa_job_args(
+    source_service: SourceService,  # Source service for audio paths/text
+) -> Callable:  # fn(state_store, workflow_id, session_id) -> List[(args, kwargs)]
+    """
+    Create the job_args_builder for FA job sequences.
+    
+    Returns a function that extracts audio paths and text from workflow state,
+    producing one (args, kwargs) pair per selected source.
+    """
+```
+
+``` python
+def build_fa_on_complete(
+    source_service: SourceService,  # Source service for source block metadata
+    seg_urls: SegmentationUrls,  # Segmentation URL bundle
+    fa_toggle_url: str,  # URL for FA toggle route
+    fa_available: bool,  # Whether FA plugin is available
+    state_store: WorkflowStateStore,  # State store
+    workflow_id: str,  # Workflow ID
+    step_id: str = "segmentation",  # Step ID for segmentation state
+) -> Callable:  # async fn(results, request, sess) -> List[FT]
+    """
+    Create the on_complete callback for FA job sequences.
+    
+    Converts per-source FA plugin results into TextSegments using VAD chunk
+    alignment, updates segmentation state (fa_presplit, segments, etc.),
+    and returns OOB card stack + toggle + alignment status updates.
     """
 ```
 
 ``` python
 def create_seg_mutation_wrapper(
     handler_result: Callable,  # _handle_seg_*_result function
-    fa_trigger_url: str = "",  # URL for FA trigger route
+    jm_trigger: Any = None,  # Pre-rendered job monitor trigger element
     fa_toggle_url: str = "",  # URL for FA toggle route
     fa_available: bool = False,  # Whether FA plugin is available
     clear_fa_presplit: bool = False,  # Whether to clear fa_presplit after handler (for NLTK Split)
@@ -431,7 +436,7 @@ def wrap_align_mutation_handler(
 def create_seg_init_chrome_wrapper(
     align_urls:AlignmentUrls,  # URL bundle for alignment routes (for KB system)
     switch_chrome_url:str,  # URL for chrome switching (for KB system)
-    fa_trigger_url:str="",  # URL for forced alignment trigger (optional)
+    jm_trigger:Any=None,  # Pre-rendered job monitor trigger element (optional)
     fa_toggle_url:str="",  # URL for forced alignment toggle (optional)
     fa_available:bool=False,  # Whether forced alignment plugin is available
 ) -> Callable:  # Wrapped handler that builds KB system and shared chrome
@@ -477,15 +482,15 @@ def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds
 
 ``` python
 def create_seg_mutation_wrappers(
-    fa_trigger_url: str = "",  # URL for FA trigger route
+    jm_trigger: Any = None,  # Pre-rendered job monitor trigger element
     fa_toggle_url: str = "",  # URL for FA toggle route
     fa_available: bool = False,  # Whether FA plugin is available
 ) -> dict:  # Dict with keys: split, merge, undo, reset, ai_split
     """
     Create wrapped mutation handlers with FA controls in toolbar.
     
-    Returns a dict of handler name → wrapped handler function.
-    Called at setup time when FA URLs are known.
+    Returns a dict of handler name -> wrapped handler function.
+    Called at setup time when job monitor trigger element and FA URLs are known.
     The ai_split wrapper has clear_fa_presplit=True — clicking NLTK Split
     discards the FA pre-split snapshot and replaces the toggle with the trigger button.
     """
@@ -771,10 +776,17 @@ def render_combined_step(
     align_urls:AlignmentUrls=None,  # URL bundle for alignment routes
     switch_chrome_url:str="",  # URL for chrome switching route
     fa_available:bool=False,  # Whether forced alignment plugin is available
-    fa_trigger_url:str="",  # URL for forced alignment trigger route
+    jm_trigger:Any=None,  # Pre-rendered job monitor trigger element (or None)
     fa_toggle_url:str="",  # URL for forced alignment toggle route
+    jm_overlay_el:Any=None,  # Job monitor overlay element (or placeholder)
+    jm_modal_el:Any=None,  # Job monitor modal element (or placeholder)
 ) -> Any:  # FastHTML component with full dual-column layout
-    "Render Phase 2: Combined Segment & Align step with dual-column layout."
+    """
+    Render Phase 2: Combined Segment & Align step with dual-column layout.
+    
+    The dual-column container has position:relative for the job monitor overlay,
+    and a stable ID (CombinedHtmlIds.COLUMNS) for overlay targeting.
+    """
 ```
 
 #### Variables

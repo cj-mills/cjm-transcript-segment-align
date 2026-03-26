@@ -1,4 +1,22 @@
 plugins:
+  # ----------------------------------------------------------------
+  # Infrastructure Worker: NVIDIA Monitor
+  # Requires nvitop, lightweight python env
+  # ----------------------------------------------------------------
+  - name: sys-mon-nvidia
+    env_name: test-sys-mon
+    
+    # Environment File (System Deps)
+    env_file: "https://raw.githubusercontent.com/cj-mills/cjm-system-monitor-nvidia/main/environment.yml"
+    
+    # The Plugin Package
+    package: "git+https://github.com/cj-mills/cjm-system-monitor-nvidia.git"
+    
+    # Interface Libraries
+    # Note: Requires cjm-infra-plugin-system for the SystemStats DTO
+    interface_libs:
+      - "git+https://github.com/cj-mills/cjm-plugin-system.git"
+      - "git+https://github.com/cj-mills/cjm-infra-plugin-system.git"
 
   # ----------------------------------------------------------------
   # Text Processing: NLTK
