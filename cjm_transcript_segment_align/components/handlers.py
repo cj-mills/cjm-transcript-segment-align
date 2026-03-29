@@ -28,7 +28,7 @@ from cjm_transcript_segment_align.components.step_renderer import (
     render_footer_inner_content,
 )
 from cjm_transcript_segment_align.components.keyboard_config import (
-    build_combined_kb_system, render_keyboard_hints_collapsible,
+    build_combined_kb_system,
     generate_zone_change_js, SWITCH_CHROME_BTN_ID,
 )
 from cjm_transcript_segmentation.models import TextSegment, SegmentationUrls
@@ -446,13 +446,6 @@ def create_seg_init_chrome_wrapper(
             hx_swap_oob="true",
         )
         
-        # Update hints to include zone switch info
-        hints_oob = Div(
-            render_keyboard_hints_collapsible(kb_manager, include_zone_switch=True),
-            id=CombinedHtmlIds.SHARED_HINTS,
-            hx_swap_oob="innerHTML"
-        )
-        
         # Build FA extra_actions for toolbar
         fa_extra = build_fa_extra_actions(
             seg_state, jm_trigger, fa_toggle_url, fa_available,
@@ -494,7 +487,7 @@ def create_seg_init_chrome_wrapper(
         
         return (
             result.column_body, kb_system_oob, zone_change_js, chrome_switch_btn,
-            hints_oob, toolbar_oob, controls_oob, footer_oob, mini_stats_oob,
+            toolbar_oob, controls_oob, footer_oob, mini_stats_oob,
         )
     
     return wrapped_seg_init

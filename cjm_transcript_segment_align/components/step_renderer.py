@@ -67,10 +67,12 @@ from cjm_transcript_vad_align.components.card_stack_config import (
 
 # Shared keyboard config (combined-level)
 from cjm_transcript_segment_align.components.keyboard_config import (
-    build_combined_kb_system,
-    render_keyboard_hints_collapsible, generate_zone_change_js,
+    build_combined_kb_system, generate_zone_change_js,
     SWITCH_CHROME_BTN_ID,
 )
+
+# Keyboard hints modal
+from cjm_fasthtml_keyboard_navigation.components.hints_modal import render_keyboard_hints_modal
 from cjm_transcript_segmentation.components.card_stack_config import (
     SEG_CS_CONFIG, SEG_CS_IDS,
 )
@@ -212,28 +214,15 @@ def _render_shared_chrome(
     seg_state:dict=None,  # Extracted segmentation state (None = show placeholders)
     align_state:dict=None,  # Extracted alignment state (None = no VAD data yet)
     urls:SegmentationUrls=None,  # Segmentation URL bundle (required when seg_state provided)
-    kb_manager:Any=None,  # Keyboard manager (required when seg_state provided)
     fa_extra_actions:Any=None,  # FA controls for toolbar extra_actions slot
     nltk_split_disabled:bool=False,  # Whether NLTK Split button is disabled
-) -> tuple:  # (hints, toolbar, controls, footer)
+) -> tuple:  # (toolbar, controls, footer)
     """Render shared chrome containers, populated with segmentation content when initialized.
     
     Takes extracted state dicts from `extract_seg_state()` and `extract_alignment_state()`
     which contain deserialized TextSegment and VADChunk objects.
     """
     is_init = seg_state is not None and seg_state.get("is_initialized", False)
-
-    # --- Hints ---
-    if is_init and kb_manager:
-        hints_content = render_keyboard_hints_collapsible(kb_manager)
-    else:
-        hints_content = _placeholder("Keyboard hints will appear here when a column is active.")
-
-    hints = Div(
-        hints_content,
-        id=CombinedHtmlIds.SHARED_HINTS,
-        cls=str(p(2))
-    )
 
     # --- Toolbar ---
     if is_init and urls:
@@ -294,7 +283,7 @@ def _render_shared_chrome(
         )
     )
 
-    return hints, toolbar, controls, footer
+    return toolbar, controls, footer
 
 # %% ../../nbs/components/step_renderer.ipynb #c9d0e1f2
 # Shared column styling (reused by init handler for outerHTML swap)
@@ -472,8 +461,12 @@ def render_combined_step(
             seg_state.get("segments", []), nltk_presplit,
         ) if nltk_presplit else True  # Disabled at init if no presplit saved yet
 
-    # Variables for KB system
+    # Build KB manager for modal (always — modal content is static)
     kb_manager = None
+    if align_urls:
+        kb_manager, _ = build_combined_kb_system(seg_urls, align_urls)
+
+    # Variables for KB system (only built when initialized)
     kb_system = None
     zone_change_js = None
 
@@ -485,7 +478,7 @@ def render_combined_step(
         card_width = seg_state["card_width"]
 
         if align_urls:
-            kb_manager, kb_system = build_combined_kb_system(seg_urls, align_urls)
+            _, kb_system = build_combined_kb_system(seg_urls, align_urls)
             zone_change_js = generate_zone_change_js(switch_chrome_url)
 
         column_body = render_seg_column_body(
@@ -498,11 +491,10 @@ def render_combined_step(
         )
         mini_stats_text = render_seg_mini_stats_text(segments)
 
-        hints, toolbar, controls, footer = _render_shared_chrome(
+        toolbar, controls, footer = _render_shared_chrome(
             seg_state=seg_state,
             align_state=align_state,
             urls=seg_urls,
-            kb_manager=kb_manager,
             fa_extra_actions=fa_extra,
             nltk_split_disabled=nltk_disabled,
         )
@@ -513,7 +505,7 @@ def render_combined_step(
             mini_stats_text=mini_stats_text,
         )
     else:
-        hints, toolbar, controls, footer = _render_shared_chrome(
+        toolbar, controls, footer = _render_shared_chrome(
             align_state=align_state,
         )
         seg_col = _render_seg_column(
@@ -576,6 +568,12 @@ def render_combined_step(
             hx_swap="none",
         )
 
+    # Keyboard hints modal (rendered once, static — no OOB updates needed)
+    if kb_manager:
+        hints_modal, hints_trigger, hints_script = render_keyboard_hints_modal(kb_manager)
+    else:
+        hints_modal, hints_trigger, hints_script = Div(), Div(), Div()
+
     # Dual-column container with position:relative for job monitor overlay
     columns_children = [seg_col, align_col]
     if jm_overlay_el is not None:
@@ -583,13 +581,16 @@ def render_combined_step(
 
     return Div(
         Div(
-            H2("Segment & Align", cls=combine_classes(font_size._3xl, font_weight.bold)),
-            P(
-                "Decompose text into segments and align with audio timestamps.",
-                cls=combine_classes(text_dui.base_content.opacity(70), m.b(2))
+            Div(
+                H2("Segment & Align", cls=combine_classes(font_size._3xl, font_weight.bold)),
+                P(
+                    "Decompose text into segments and align with audio timestamps.",
+                    cls=combine_classes(text_dui.base_content.opacity(70), m.b(2))
+                ),
             ),
+            hints_trigger,
+            cls=combine_classes(flex_display, items.start, justify.between),
         ),
-        hints,
         toolbar,
         controls,
         Div(
@@ -609,6 +610,8 @@ def render_combined_step(
         active_column_input,
         jm_modal_el,  # Job monitor modal (page-level, outside columns)
         jm_kb_script_el,  # Job monitor keyboard script placeholder (for OOB pause/resume)
+        hints_modal,  # Keyboard hints modal dialog
+        hints_script,  # Global ? key listener
         id=SegmentationHtmlIds.SEG_CONTAINER,
         cls=combine_classes(
             w.full, h.full,

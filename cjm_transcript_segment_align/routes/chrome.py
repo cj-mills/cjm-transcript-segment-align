@@ -46,10 +46,7 @@ from cjm_transcript_segment_align.components.handlers import (
     build_fa_extra_actions, segments_match_presplit,
 )
 
-# Keyboard config
-from cjm_transcript_segment_align.components.keyboard_config import (
-    build_combined_kb_system, render_keyboard_hints_collapsible,
-)
+
 
 DEBUG_SWITCH_CHROME = False
 
@@ -82,9 +79,6 @@ async def _handle_switch_chrome(
     segment_count = len(seg_state.get("segments", []))
     chunk_count = len(align_state.get("vad_chunks", []))
 
-    # Build combined KB manager for hints
-    kb_manager, _ = build_combined_kb_system(seg_urls, align_urls)
-
     if active_column == "seg":
         # Segmentation chrome
         segments = [TextSegment.from_dict(s) for s in seg_state.get("segments", [])]
@@ -103,7 +97,6 @@ async def _handle_switch_chrome(
             seg_state.get("segments", []), nltk_presplit,
         )
 
-        hints_content = render_keyboard_hints_collapsible(kb_manager, include_zone_switch=True)
         toolbar_content = render_seg_toolbar(
             reset_url=seg_urls.reset,
             ai_split_url=seg_urls.ai_split,
@@ -124,7 +117,6 @@ async def _handle_switch_chrome(
         is_auto_mode = align_state.get("is_auto_mode", False)
         card_width = align_state.get("card_width", 40)
 
-        hints_content = render_keyboard_hints_collapsible(kb_manager, include_zone_switch=True)
         toolbar_content = render_align_toolbar(
             visible_count=visible_count,
             is_auto_mode=is_auto_mode,
@@ -136,11 +128,6 @@ async def _handle_switch_chrome(
         print(f"[SWITCH_CHROME] returning OOB swaps for {active_column}")
 
     # Return OOB swaps
-    hints_oob = Div(
-        hints_content,
-        id=CombinedHtmlIds.SHARED_HINTS,
-        hx_swap_oob="innerHTML"
-    )
     toolbar_oob = Div(
         toolbar_content,
         id=CombinedHtmlIds.SHARED_TOOLBAR,
@@ -157,7 +144,7 @@ async def _handle_switch_chrome(
         hx_swap_oob="innerHTML"
     )
 
-    return (hints_oob, toolbar_oob, controls_oob, footer_oob)
+    return (toolbar_oob, controls_oob, footer_oob)
 
 # %% ../../nbs/routes/chrome.ipynb #g7b8c9d0
 def init_chrome_router(

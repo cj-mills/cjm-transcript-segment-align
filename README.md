@@ -43,32 +43,31 @@ graph LR
     routes_init[routes.init<br/>routes/init]
     services_forced_alignment[services.forced_alignment<br/>forced_alignment]
 
+    components_handlers --> components_keyboard_config
     components_handlers --> services_forced_alignment
+    components_handlers --> html_ids
     components_handlers --> components_step_renderer
     components_handlers --> routes_forced_alignment
-    components_handlers --> html_ids
-    components_handlers --> components_keyboard_config
     components_keyboard_config --> html_ids
+    components_step_renderer --> components_keyboard_config
     components_step_renderer --> components_helpers
     components_step_renderer --> html_ids
-    components_step_renderer --> components_keyboard_config
-    routes_chrome --> components_handlers
     routes_chrome --> html_ids
     routes_chrome --> components_step_renderer
-    routes_chrome --> components_keyboard_config
+    routes_chrome --> components_handlers
     routes_forced_alignment --> html_ids
     routes_forced_alignment --> components_step_renderer
-    routes_init --> routes_forced_alignment
     routes_init --> components_handlers
-    routes_init --> components_keyboard_config
-    routes_init --> services_forced_alignment
-    routes_init --> html_ids
-    routes_init --> components_step_renderer
     routes_init --> models
+    routes_init --> html_ids
+    routes_init --> routes_forced_alignment
+    routes_init --> services_forced_alignment
+    routes_init --> components_keyboard_config
     routes_init --> routes_chrome
+    routes_init --> components_step_renderer
 ```
 
-*23 cross-module dependencies detected*
+*22 cross-module dependencies detected*
 
 ## CLI Reference
 
@@ -644,22 +643,12 @@ from cjm_transcript_segment_align.components.keyboard_config import (
     ZONE_CHANGE_CALLBACK,
     KB_SYSTEM_ID,
     SWITCH_CHROME_BTN_ID,
-    render_keyboard_hints_collapsible,
     build_combined_kb_system,
     generate_zone_change_js
 )
 ```
 
 #### Functions
-
-``` python
-def render_keyboard_hints_collapsible(
-    manager:ZoneManager,  # Keyboard zone manager with actions configured
-    container_id:str="sd-keyboard-hints",  # HTML ID for the hints container
-    include_zone_switch:bool=False,  # Whether to include zone switch hints
-) -> Any:  # Collapsible keyboard hints component
-    "Render keyboard shortcut hints in a collapsible DaisyUI collapse."
-```
 
 ``` python
 def build_combined_kb_system(
@@ -814,10 +803,9 @@ def _render_shared_chrome(
     seg_state:dict=None,  # Extracted segmentation state (None = show placeholders)
     align_state:dict=None,  # Extracted alignment state (None = no VAD data yet)
     urls:SegmentationUrls=None,  # Segmentation URL bundle (required when seg_state provided)
-    kb_manager:Any=None,  # Keyboard manager (required when seg_state provided)
     fa_extra_actions:Any=None,  # FA controls for toolbar extra_actions slot
     nltk_split_disabled:bool=False,  # Whether NLTK Split button is disabled
-) -> tuple:  # (hints, toolbar, controls, footer)
+) -> tuple:  # (toolbar, controls, footer)
     """
     Render shared chrome containers, populated with segmentation content when initialized.
     
