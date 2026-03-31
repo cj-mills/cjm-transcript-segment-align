@@ -240,6 +240,10 @@ def generate_zone_change_js(
 
         // Global callback for ZoneManager (called on keyboard zone switch)
         window.{ZONE_CHANGE_CALLBACK} = function(newZoneId, prevZoneId) {{
+            // Skip redundant chrome swap when zone hasn't actually changed
+            // (scrollbar/scrollwheel call setActiveZone on every event as a safety measure)
+            if (newZoneId === prevZoneId) return;
+
             if (window.DEBUG_KB_SYSTEM) {{
                 console.log('[KB_SYSTEM] Zone change:', prevZoneId, '->', newZoneId);
             }}
