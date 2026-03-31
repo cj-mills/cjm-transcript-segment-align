@@ -45,26 +45,26 @@ graph LR
 
     components_handlers --> services_forced_alignment
     components_handlers --> components_step_renderer
-    components_handlers --> routes_forced_alignment
     components_handlers --> components_keyboard_config
+    components_handlers --> routes_forced_alignment
     components_handlers --> html_ids
     components_keyboard_config --> html_ids
-    components_step_renderer --> components_helpers
     components_step_renderer --> components_keyboard_config
+    components_step_renderer --> components_helpers
     components_step_renderer --> html_ids
-    routes_chrome --> components_handlers
     routes_chrome --> components_step_renderer
+    routes_chrome --> components_handlers
     routes_chrome --> html_ids
     routes_forced_alignment --> components_step_renderer
     routes_forced_alignment --> html_ids
-    routes_init --> models
-    routes_init --> services_forced_alignment
-    routes_init --> components_handlers
-    routes_init --> components_step_renderer
-    routes_init --> components_keyboard_config
-    routes_init --> routes_chrome
-    routes_init --> html_ids
     routes_init --> routes_forced_alignment
+    routes_init --> routes_chrome
+    routes_init --> components_handlers
+    routes_init --> components_keyboard_config
+    routes_init --> services_forced_alignment
+    routes_init --> models
+    routes_init --> html_ids
+    routes_init --> components_step_renderer
 ```
 
 *22 cross-module dependencies detected*
@@ -99,6 +99,7 @@ def _restore_align_auto_nav_js() -> str
     
     After chrome switch re-renders the toolbar, the checkbox starts unchecked.
     This reads the JS state (source of truth) and restores the checkbox.
+    Included inside the toolbar OOB so it runs after HTMX inserts the new content.
     """
 ```
 

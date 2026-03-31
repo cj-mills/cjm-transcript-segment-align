@@ -34,9 +34,7 @@ from cjm_transcript_segmentation.components.card_stack_config import (
 from cjm_transcript_vad_align.components.step_renderer import (
     render_align_toolbar, render_align_footer_content,
 )
-from cjm_transcript_vad_align.components.audio_controls import (
-    render_align_audio_controls, AlignAudioControlIds,
-)
+from cjm_transcript_vad_align.components.audio_controls import AlignAudioControlIds
 from cjm_transcript_vad_align.components.card_stack_config import (
     ALIGN_CS_CONFIG, ALIGN_CS_IDS,
 )
@@ -61,6 +59,7 @@ def _restore_align_auto_nav_js() -> str:
     
     After chrome switch re-renders the toolbar, the checkbox starts unchecked.
     This reads the JS state (source of truth) and restores the checkbox.
+    Included inside the toolbar OOB so it runs after HTMX inserts the new content.
     """
     sk = ALIGN_AUDIO_CONFIG.state_key
     toggle_id = AlignAudioControlIds.AUTO_NAV_TOGGLE
@@ -128,20 +127,18 @@ async def _handle_switch_chrome(
         )
         controls_content = render_width_slider(SEG_CS_CONFIG, SEG_CS_IDS, card_width=card_width)
     else:
-        # Alignment chrome (toolbar + controls)
-        chunks = [VADChunk.from_dict(c) for c in align_state.get("vad_chunks", [])]
-        focused_index = align_state.get("focused_chunk_index", 0)
+        # Alignment chrome (toolbar with auto-play toggle + controls)
         visible_count = align_state.get("visible_count", 5)
         is_auto_mode = align_state.get("is_auto_mode", False)
         card_width = align_state.get("card_width", 40)
 
-        # Toolbar includes restore script — runs after innerHTML swap inserts the checkbox
+        # Toolbar now includes auto-play toggle internally;
+        # restore script syncs checkbox with JS state after re-render
         toolbar_content = Div(
             render_align_toolbar(
                 visible_count=visible_count,
                 is_auto_mode=is_auto_mode,
             ),
-            render_align_audio_controls(),
             Script(_restore_align_auto_nav_js()),
         )
         controls_content = render_width_slider(ALIGN_CS_CONFIG, ALIGN_CS_IDS, card_width=card_width)
