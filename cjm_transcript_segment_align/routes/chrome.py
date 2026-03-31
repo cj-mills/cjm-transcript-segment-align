@@ -34,7 +34,9 @@ from cjm_transcript_segmentation.components.card_stack_config import (
 from cjm_transcript_vad_align.components.step_renderer import (
     render_align_toolbar, render_align_footer_content,
 )
-from cjm_transcript_vad_align.components.audio_controls import AlignAudioControlIds
+from cjm_transcript_vad_align.components.audio_controls import (
+    AlignAudioControlIds, _TOGGLE_BG_OFF, _TOGGLE_BG_ON,
+)
 from cjm_transcript_vad_align.components.card_stack_config import (
     ALIGN_CS_CONFIG, ALIGN_CS_IDS,
 )
@@ -55,17 +57,22 @@ DEBUG_SWITCH_CHROME = False
 
 # %% ../../nbs/routes/chrome.ipynb #e5f6a7b8
 def _restore_align_auto_nav_js() -> str:
-    """Generate JS to sync the auto-navigate toggle checkbox with the Web Audio state.
+    """Generate JS to sync the auto-navigate toggle checkbox and color classes with the Web Audio state.
     
-    After chrome switch re-renders the toolbar, the checkbox starts unchecked.
-    This reads the JS state (source of truth) and restores the checkbox.
+    After chrome switch re-renders the toolbar, the checkbox starts unchecked with bg-error.
+    This reads the JS state (source of truth) and restores the checkbox + color classes.
     Included inside the toolbar OOB so it runs after HTMX inserts the new content.
     """
     sk = ALIGN_AUDIO_CONFIG.state_key
     toggle_id = AlignAudioControlIds.AUTO_NAV_TOGGLE
     return f"""
         var _cb = document.getElementById('{toggle_id}');
-        if (_cb && window.{sk}) _cb.checked = window.{sk}.autoNavigate || false;
+        if (_cb && window.{sk}) {{
+            var _on = window.{sk}.autoNavigate || false;
+            _cb.checked = _on;
+            _cb.classList.remove('{_TOGGLE_BG_OFF}', '{_TOGGLE_BG_ON}');
+            _cb.classList.add(_on ? '{_TOGGLE_BG_ON}' : '{_TOGGLE_BG_OFF}');
+        }}
     """
 
 
@@ -133,7 +140,7 @@ async def _handle_switch_chrome(
         card_width = align_state.get("card_width", 40)
 
         # Toolbar now includes auto-play toggle internally;
-        # restore script syncs checkbox with JS state after re-render
+        # restore script syncs checkbox + color classes with JS state after re-render
         toolbar_content = Div(
             render_align_toolbar(
                 visible_count=visible_count,
