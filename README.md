@@ -43,28 +43,28 @@ graph LR
     routes_init[routes.init<br/>routes/init]
     services_forced_alignment[services.forced_alignment<br/>forced_alignment]
 
-    components_handlers --> components_keyboard_config
     components_handlers --> services_forced_alignment
-    components_handlers --> html_ids
     components_handlers --> components_step_renderer
     components_handlers --> routes_forced_alignment
+    components_handlers --> components_keyboard_config
+    components_handlers --> html_ids
     components_keyboard_config --> html_ids
-    components_step_renderer --> components_keyboard_config
     components_step_renderer --> components_helpers
+    components_step_renderer --> components_keyboard_config
     components_step_renderer --> html_ids
-    routes_chrome --> html_ids
-    routes_chrome --> components_step_renderer
     routes_chrome --> components_handlers
-    routes_forced_alignment --> html_ids
+    routes_chrome --> components_step_renderer
+    routes_chrome --> html_ids
     routes_forced_alignment --> components_step_renderer
-    routes_init --> components_handlers
+    routes_forced_alignment --> html_ids
     routes_init --> models
-    routes_init --> html_ids
-    routes_init --> routes_forced_alignment
     routes_init --> services_forced_alignment
+    routes_init --> components_handlers
+    routes_init --> components_step_renderer
     routes_init --> components_keyboard_config
     routes_init --> routes_chrome
-    routes_init --> components_step_renderer
+    routes_init --> html_ids
+    routes_init --> routes_forced_alignment
 ```
 
 *22 cross-module dependencies detected*
@@ -91,6 +91,16 @@ from cjm_transcript_segment_align.routes.chrome import (
 ```
 
 #### Functions
+
+``` python
+def _restore_align_auto_nav_js() -> str
+    """
+    Generate JS to sync the auto-navigate toggle checkbox with the Web Audio state.
+    
+    After chrome switch re-renders the toolbar, the checkbox starts unchecked.
+    This reads the JS state (source of truth) and restores the checkbox.
+    """
+```
 
 ``` python
 async def _handle_switch_chrome(
@@ -778,16 +788,17 @@ def render_alignment_status(
 
 ``` python
 def render_footer_inner_content(
-    column_footer:Any,  # Column-specific footer content (decomp or align)
+    seg_footer:Any,  # Segmentation footer content (or None if not initialized)
+    align_footer:Any,  # Alignment footer content (or None if not initialized)
     segment_count:int,  # Number of text segments
     chunk_count:int,  # Number of VAD chunks
-) -> Any:  # Styled wrapper div with column footer and alignment status
+) -> Any:  # Styled wrapper div with both column footers and alignment status
     """
-    Render the footer inner content with consistent styling.
+    Render the footer inner content with both column footers always present.
     
-    This ensures the footer layout (justify-between) is preserved across
-    all OOB swaps. Both the column-specific footer content and the
-    alignment status indicator are wrapped in a flex container.
+    Both footers remain in the DOM so their internal OOB targets (progress
+    indicators, source position) are always valid regardless of which column
+    is active. This enables cross-zone features like auto-play.
     """
 ```
 

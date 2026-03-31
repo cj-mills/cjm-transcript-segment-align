@@ -53,6 +53,7 @@ from cjm_transcript_vad_align.routes.core import (
 from cjm_transcript_vad_align.routes.handlers import (
     AlignInitResult, _handle_align_init,
 )
+from cjm_transcript_vad_align.components.step_renderer import render_align_footer_content
 from cjm_transcript_vad_align.services.alignment import AlignmentService
 from cjm_transcript_source_select.services.source import SourceService
 
@@ -410,6 +411,7 @@ def create_seg_init_chrome_wrapper(
         workflow_state = state_store.get_state(workflow_id, session_id)
         step_states = workflow_state.get("step_states", {})
         seg_state = step_states.get("segmentation", {})
+        align_state = step_states.get("alignment", {})
 
         # Only save nltk_presplit if not already saved (avoid overwriting on re-init)
         if "nltk_presplit" not in seg_state:
@@ -418,7 +420,7 @@ def create_seg_init_chrome_wrapper(
             workflow_state["step_states"] = step_states
             state_store.update_state(workflow_id, session_id, workflow_state)
 
-        chunk_count = len(step_states.get("alignment", {}).get("vad_chunks", []))
+        chunk_count = len(align_state.get("vad_chunks", []))
         segment_count = len(result.segments)
         
         # Build combined KB system with both zones
@@ -472,12 +474,20 @@ def create_seg_init_chrome_wrapper(
             hx_swap_oob="innerHTML"
         )
         
-        # Footer OOB with alignment status
+        # Footer OOB with both column footers + alignment status
+        seg_footer = render_seg_footer_content(result.segments, result.focused_index)
+        
+        # Align footer (if alignment is initialized)
+        is_align_init = align_state.get("is_initialized", False)
+        if is_align_init and align_state.get("vad_chunks"):
+            align_chunks = [VADChunk.from_dict(c) for c in align_state["vad_chunks"]]
+            align_focused = align_state.get("focused_chunk_index", 0)
+            align_footer = render_align_footer_content(align_chunks, align_focused)
+        else:
+            align_footer = None
+        
         footer_oob = Div(
-            render_footer_inner_content(
-                render_seg_footer_content(result.segments, result.focused_index),
-                segment_count, chunk_count
-            ),
+            render_footer_inner_content(seg_footer, align_footer, segment_count, chunk_count),
             id=CombinedHtmlIds.SHARED_FOOTER,
             hx_swap_oob="innerHTML"
         )
@@ -513,11 +523,7 @@ def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds
         visible_count:int=5,
         card_width:int=40,
     ):
-        """Wrapped align init that adds mini-stats and alignment status in footer."""
-        from cjm_transcript_segmentation.components.step_renderer import render_seg_footer_content
-        from cjm_fasthtml_tailwind.utilities.typography import font_size as fs
-        from cjm_fasthtml_daisyui.utilities.semantic_colors import text_dui as td
-
+        """Wrapped align init that adds mini-stats and both footers."""
         # Call pure domain handler
         result: AlignInitResult = await _handle_align_init(
             state_store, workflow_id, source_service, alignment_service,
@@ -535,21 +541,15 @@ def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds
         # Mini-stats badge OOB
         mini_stats_oob = render_align_mini_stats_badge(result.chunks, oob=True)
         
-        # Footer OOB with alignment status (targets sd-shared-footer which always exists,
-        # unlike sd-alignment-status which is inside the footer and may not exist yet)
+        # Footer OOB with both column footers + alignment status
         segments = [TextSegment.from_dict(s) for s in seg_state.get("segments", [])]
-        focused_index = seg_state.get("focused_index", 0)
+        seg_focused = seg_state.get("focused_index", 0)
+        seg_footer = render_seg_footer_content(segments, seg_focused) if segments else None
         
-        if segments:
-            column_footer = render_seg_footer_content(segments, focused_index)
-        else:
-            column_footer = Span(
-                "Footer with progress and timestamp details will appear here.",
-                cls=combine_classes(fs.sm, td.base_content.opacity(50))
-            )
+        align_footer = render_align_footer_content(result.chunks, 0)
         
         footer_oob = Div(
-            render_footer_inner_content(column_footer, segment_count, chunk_count),
+            render_footer_inner_content(seg_footer, align_footer, segment_count, chunk_count),
             id=CombinedHtmlIds.SHARED_FOOTER,
             hx_swap_oob="innerHTML"
         )

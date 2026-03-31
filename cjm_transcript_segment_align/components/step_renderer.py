@@ -27,7 +27,7 @@ from cjm_fasthtml_tailwind.utilities.borders import border
 from cjm_fasthtml_tailwind.utilities.effects import opacity, ring
 from cjm_fasthtml_tailwind.utilities.transitions_and_animation import transition, duration
 from cjm_fasthtml_tailwind.utilities.flexbox_and_grid import (
-    flex_display, flex_direction, justify, items, gap, grow
+    flex_display, flex_direction, justify, items, gap, grow, flex_wrap
 )
 from cjm_fasthtml_tailwind.core.base import combine_classes
 
@@ -60,6 +60,7 @@ from cjm_transcript_segmentation.components.step_renderer import (
 # Alignment composable renderers
 from cjm_transcript_vad_align.components.step_renderer import (
     render_align_column_body, render_align_mini_stats_text,
+    render_align_footer_content,
 )
 from cjm_transcript_vad_align.components.card_stack_config import (
     ALIGN_CS_IDS,
@@ -180,24 +181,26 @@ def render_alignment_status(
     )
 
 
-# Shared footer inner content styling
-_FOOTER_INNER_CLS = combine_classes(flex_display, justify.between, items.center, w.full, gap(4))
+# Shared footer inner content styling — flex-wrap allows vertical stacking on narrow viewports
+_FOOTER_INNER_CLS = combine_classes(flex_display, flex_wrap, justify.between, items.center, w.full, gap(4))
 
 
 #| export
 def render_footer_inner_content(
-    column_footer:Any,  # Column-specific footer content (decomp or align)
+    seg_footer:Any,  # Segmentation footer content (or None if not initialized)
+    align_footer:Any,  # Alignment footer content (or None if not initialized)
     segment_count:int,  # Number of text segments
     chunk_count:int,  # Number of VAD chunks
-) -> Any:  # Styled wrapper div with column footer and alignment status
-    """Render the footer inner content with consistent styling.
+) -> Any:  # Styled wrapper div with both column footers and alignment status
+    """Render the footer inner content with both column footers always present.
     
-    This ensures the footer layout (justify-between) is preserved across
-    all OOB swaps. Both the column-specific footer content and the
-    alignment status indicator are wrapped in a flex container.
+    Both footers remain in the DOM so their internal OOB targets (progress
+    indicators, source position) are always valid regardless of which column
+    is active. This enables cross-zone features like auto-play.
     """
     return Div(
-        column_footer,
+        seg_footer or Span(),
+        align_footer or Span(),
         render_alignment_status(segment_count, chunk_count),
         cls=_FOOTER_INNER_CLS
     )
@@ -260,18 +263,30 @@ def _render_shared_chrome(
         cls=str(p(2))
     )
 
-    # --- Footer with alignment status ---
-    segment_count = len(seg_state.get("segments", [])) if seg_state else 0
-    chunk_count = len(align_state.get("vad_chunks", [])) if align_state else 0
+    # --- Footer with both column footers + alignment status ---
+    # Note: seg_state["segments"] and align_state["vad_chunks"] are already deserialized
+    # objects from extract_seg_state/extract_alignment_state — don't call from_dict() again
+    seg_segments = seg_state.get("segments", []) if seg_state else []
+    segment_count = len(seg_segments)
+    align_chunks = align_state.get("vad_chunks", []) if align_state else []
+    chunk_count = len(align_chunks)
     
-    if is_init:
-        segments = seg_state.get("segments", [])
+    # Seg footer
+    if is_init and seg_segments:
         focused_index = seg_state.get("focused_index", 0)
-        column_footer = render_seg_footer_content(segments, focused_index)
+        seg_footer = render_seg_footer_content(seg_segments, focused_index)
     else:
-        column_footer = _placeholder("Footer with progress and timestamp details will appear here.")
+        seg_footer = None
 
-    footer_inner = render_footer_inner_content(column_footer, segment_count, chunk_count)
+    # Align footer
+    is_align_init = align_state is not None and align_state.get("is_initialized", False)
+    if is_align_init and align_chunks:
+        align_focused = align_state.get("focused_index", 0)
+        align_footer = render_align_footer_content(align_chunks, align_focused)
+    else:
+        align_footer = None
+
+    footer_inner = render_footer_inner_content(seg_footer, align_footer, segment_count, chunk_count)
 
     footer = Div(
         footer_inner,

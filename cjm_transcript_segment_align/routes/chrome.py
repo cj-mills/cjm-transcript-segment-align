@@ -8,7 +8,7 @@ __all__ = ['DEBUG_SWITCH_CHROME', 'init_chrome_router']
 # %% ../../nbs/routes/chrome.ipynb #c3d4e5f6
 from typing import Tuple, Dict, Callable
 
-from fasthtml.common import APIRouter, Div
+from fasthtml.common import APIRouter, Div, Script
 
 from cjm_fasthtml_card_stack.components.controls import render_width_slider
 from cjm_fasthtml_card_stack.core.constants import DEFAULT_VISIBLE_COUNT, DEFAULT_CARD_WIDTH
@@ -34,6 +34,9 @@ from cjm_transcript_segmentation.components.card_stack_config import (
 from cjm_transcript_vad_align.components.step_renderer import (
     render_align_toolbar, render_align_footer_content,
 )
+from cjm_transcript_vad_align.components.audio_controls import (
+    render_align_audio_controls, AlignAudioControlIds,
+)
 from cjm_transcript_vad_align.components.card_stack_config import (
     ALIGN_CS_CONFIG, ALIGN_CS_IDS,
 )
@@ -46,11 +49,27 @@ from cjm_transcript_segment_align.components.handlers import (
     build_fa_extra_actions, segments_match_presplit,
 )
 
+# Web Audio state key for auto-navigate restore
+from cjm_transcript_vad_align.components.callbacks import ALIGN_AUDIO_CONFIG
 
 
 DEBUG_SWITCH_CHROME = False
 
 # %% ../../nbs/routes/chrome.ipynb #e5f6a7b8
+def _restore_align_auto_nav_js() -> str:
+    """Generate JS to sync the auto-navigate toggle checkbox with the Web Audio state.
+    
+    After chrome switch re-renders the toolbar, the checkbox starts unchecked.
+    This reads the JS state (source of truth) and restores the checkbox.
+    """
+    sk = ALIGN_AUDIO_CONFIG.state_key
+    toggle_id = AlignAudioControlIds.AUTO_NAV_TOGGLE
+    return f"""
+        var _cb = document.getElementById('{toggle_id}');
+        if (_cb && window.{sk}) _cb.checked = window.{sk}.autoNavigate || false;
+    """
+
+
 async def _handle_switch_chrome(
     state_store:SQLiteWorkflowStateStore,  # State store instance
     workflow_id:str,  # Workflow identifier
@@ -80,7 +99,7 @@ async def _handle_switch_chrome(
     chunk_count = len(align_state.get("vad_chunks", []))
 
     if active_column == "seg":
-        # Segmentation chrome
+        # Segmentation chrome (toolbar + controls)
         segments = [TextSegment.from_dict(s) for s in seg_state.get("segments", [])]
         history = seg_state.get("history", [])
         focused_index = seg_state.get("focused_index", 0)
@@ -108,21 +127,33 @@ async def _handle_switch_chrome(
             nltk_split_disabled=nltk_disabled,
         )
         controls_content = render_width_slider(SEG_CS_CONFIG, SEG_CS_IDS, card_width=card_width)
-        column_footer = render_seg_footer_content(segments, focused_index)
     else:
-        # Alignment chrome
+        # Alignment chrome (toolbar + controls)
         chunks = [VADChunk.from_dict(c) for c in align_state.get("vad_chunks", [])]
         focused_index = align_state.get("focused_chunk_index", 0)
         visible_count = align_state.get("visible_count", 5)
         is_auto_mode = align_state.get("is_auto_mode", False)
         card_width = align_state.get("card_width", 40)
 
-        toolbar_content = render_align_toolbar(
-            visible_count=visible_count,
-            is_auto_mode=is_auto_mode,
+        # Toolbar includes restore script — runs after innerHTML swap inserts the checkbox
+        toolbar_content = Div(
+            render_align_toolbar(
+                visible_count=visible_count,
+                is_auto_mode=is_auto_mode,
+            ),
+            render_align_audio_controls(),
+            Script(_restore_align_auto_nav_js()),
         )
         controls_content = render_width_slider(ALIGN_CS_CONFIG, ALIGN_CS_IDS, card_width=card_width)
-        column_footer = render_align_footer_content(chunks, focused_index)
+
+    # --- Footer: both column footers always present ---
+    seg_segments = [TextSegment.from_dict(s) for s in seg_state.get("segments", [])]
+    seg_focused = seg_state.get("focused_index", 0)
+    seg_footer = render_seg_footer_content(seg_segments, seg_focused) if seg_segments else None
+
+    align_chunks = [VADChunk.from_dict(c) for c in align_state.get("vad_chunks", [])]
+    align_focused = align_state.get("focused_chunk_index", 0)
+    align_footer = render_align_footer_content(align_chunks, align_focused) if align_chunks else None
 
     if DEBUG_SWITCH_CHROME:
         print(f"[SWITCH_CHROME] returning OOB swaps for {active_column}")
@@ -139,7 +170,7 @@ async def _handle_switch_chrome(
         hx_swap_oob="innerHTML"
     )
     footer_oob = Div(
-        render_footer_inner_content(column_footer, segment_count, chunk_count),
+        render_footer_inner_content(seg_footer, align_footer, segment_count, chunk_count),
         id=CombinedHtmlIds.SHARED_FOOTER,
         hx_swap_oob="innerHTML"
     )
