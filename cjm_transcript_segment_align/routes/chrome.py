@@ -10,7 +10,7 @@ from typing import Tuple, Dict, Callable
 
 from fasthtml.common import APIRouter, Div
 
-from cjm_fasthtml_card_stack.components.controls import render_width_slider
+from cjm_fasthtml_card_stack.components.settings_modal import render_settings_trigger
 from cjm_fasthtml_card_stack.core.constants import DEFAULT_VISIBLE_COUNT, DEFAULT_CARD_WIDTH
 
 from cjm_fasthtml_interactions.core.state_store import get_session_id
@@ -37,6 +37,12 @@ from cjm_transcript_vad_align.components.step_renderer import (
 from cjm_transcript_vad_align.components.card_stack_config import (
     ALIGN_CS_CONFIG, ALIGN_CS_IDS,
 )
+
+from cjm_fasthtml_tailwind.utilities.sizing import w
+from cjm_fasthtml_tailwind.utilities.flexbox_and_grid import (
+    flex_display, items, gap,
+)
+from cjm_fasthtml_tailwind.core.base import combine_classes
 
 # Footer helper + FA extra_actions builder + match detection
 from cjm_transcript_segment_align.components.step_renderer import (
@@ -66,6 +72,7 @@ async def _handle_switch_chrome(
     
     Client-side toolbar state restoration (sync button, auto-play toggle)
     is handled by the centralized settle handler from toolbar_state.py.
+    Settings modals persist in the DOM — only the trigger buttons swap.
     """
     form = await request.form()
     active_column = form.get("active_column", "seg")
@@ -84,13 +91,10 @@ async def _handle_switch_chrome(
     chunk_count = len(align_state.get("vad_chunks", []))
 
     if active_column == "seg":
-        # Segmentation chrome (toolbar + controls)
+        # Segmentation chrome (settings trigger + toolbar)
         segments = [TextSegment.from_dict(s) for s in seg_state.get("segments", [])]
         history = seg_state.get("history", [])
         focused_index = seg_state.get("focused_index", 0)
-        visible_count = seg_state.get("visible_count", DEFAULT_VISIBLE_COUNT)
-        is_auto_mode = seg_state.get("is_auto_mode", False)
-        card_width = seg_state.get("card_width", DEFAULT_CARD_WIDTH)
 
         # Build FA extra_actions and NLTK Split disabled state
         fa_extra = build_fa_extra_actions(
@@ -101,28 +105,27 @@ async def _handle_switch_chrome(
             seg_state.get("segments", []), nltk_presplit,
         )
 
-        toolbar_content = render_seg_toolbar(
-            reset_url=seg_urls.reset,
-            ai_split_url=seg_urls.ai_split,
-            undo_url=seg_urls.undo,
-            can_undo=(len(history) > 0),
-            visible_count=visible_count,
-            is_auto_mode=is_auto_mode,
-            extra_actions=build_extra_actions(fa_extra),
-            nltk_split_disabled=nltk_disabled,
+        settings_trigger = render_settings_trigger(modal_id=SEG_CS_IDS.settings_modal)
+        toolbar_content = Div(
+            settings_trigger,
+            render_seg_toolbar(
+                reset_url=seg_urls.reset,
+                ai_split_url=seg_urls.ai_split,
+                undo_url=seg_urls.undo,
+                can_undo=(len(history) > 0),
+                extra_actions=build_extra_actions(fa_extra),
+                nltk_split_disabled=nltk_disabled,
+            ),
+            cls=combine_classes(flex_display, items.center, gap(2), w.full),
         )
-        controls_content = render_width_slider(SEG_CS_CONFIG, SEG_CS_IDS, card_width=card_width)
     else:
-        # Alignment chrome (toolbar with auto-play toggle + controls)
-        visible_count = align_state.get("visible_count", 5)
-        is_auto_mode = align_state.get("is_auto_mode", False)
-        card_width = align_state.get("card_width", 40)
-
-        toolbar_content = render_align_toolbar(
-            visible_count=visible_count,
-            is_auto_mode=is_auto_mode,
+        # Alignment chrome (settings trigger + auto-play toggle)
+        settings_trigger = render_settings_trigger(modal_id=ALIGN_CS_IDS.settings_modal)
+        toolbar_content = Div(
+            settings_trigger,
+            render_align_toolbar(),
+            cls=combine_classes(flex_display, items.center, gap(2), w.full),
         )
-        controls_content = render_width_slider(ALIGN_CS_CONFIG, ALIGN_CS_IDS, card_width=card_width)
 
     # --- Footer: both column footers always present ---
     seg_segments = [TextSegment.from_dict(s) for s in seg_state.get("segments", [])]
@@ -136,15 +139,10 @@ async def _handle_switch_chrome(
     if DEBUG_SWITCH_CHROME:
         print(f"[SWITCH_CHROME] returning OOB swaps for {active_column}")
 
-    # Return OOB swaps
+    # Return OOB swaps (toolbar + footer — settings modals persist in DOM)
     toolbar_oob = Div(
         toolbar_content,
         id=CombinedHtmlIds.SHARED_TOOLBAR,
-        hx_swap_oob="innerHTML"
-    )
-    controls_oob = Div(
-        controls_content,
-        id=CombinedHtmlIds.SHARED_CONTROLS,
         hx_swap_oob="innerHTML"
     )
     footer_oob = Div(
@@ -153,7 +151,7 @@ async def _handle_switch_chrome(
         hx_swap_oob="innerHTML"
     )
 
-    return (toolbar_oob, controls_oob, footer_oob)
+    return (toolbar_oob, footer_oob)
 
 # %% ../../nbs/routes/chrome.ipynb #g7b8c9d0
 def init_chrome_router(

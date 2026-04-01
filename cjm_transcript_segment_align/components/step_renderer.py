@@ -35,8 +35,8 @@ from cjm_fasthtml_tailwind.core.base import combine_classes
 from cjm_fasthtml_interactions.core.context import InteractionContext
 
 # Card stack library
-from cjm_fasthtml_card_stack.components.controls import render_width_slider
 from cjm_fasthtml_card_stack.components.states import render_loading_state
+from cjm_fasthtml_card_stack.components.settings_modal import render_card_stack_settings_modal
 from cjm_fasthtml_card_stack.core.constants import DEFAULT_VISIBLE_COUNT, DEFAULT_CARD_WIDTH
 
 # Local imports
@@ -63,7 +63,7 @@ from cjm_transcript_vad_align.components.step_renderer import (
     render_align_footer_content,
 )
 from cjm_transcript_vad_align.components.card_stack_config import (
-    ALIGN_CS_IDS,
+    ALIGN_CS_CONFIG, ALIGN_CS_IDS,
 )
 
 # Shared keyboard config (combined-level)
@@ -87,7 +87,6 @@ from .toolbar_state import generate_toolbar_restore_js
 
 # Debug flag for combined step rendering tracing (set False in production)
 DEBUG_COMBINED_RENDER = True
-
 
 # %% ../../nbs/components/step_renderer.ipynb #e5f6a7b8
 def _render_column_header(
@@ -227,7 +226,7 @@ def _render_shared_chrome(
     urls:SegmentationUrls=None,  # Segmentation URL bundle (required when seg_state provided)
     extra_actions:tuple=(),  # Extra toolbar elements (FA controls, sync toggle, etc.)
     nltk_split_disabled:bool=False,  # Whether NLTK Split button is disabled
-) -> tuple:  # (toolbar, controls, footer)
+) -> tuple:  # (toolbar, footer, settings_modals_container)
     """Render shared chrome containers, populated with segmentation content when initialized.
     
     Takes extracted state dicts from `extract_seg_state()` and `extract_alignment_state()`
@@ -235,19 +234,37 @@ def _render_shared_chrome(
     """
     is_init = seg_state is not None and seg_state.get("is_initialized", False)
 
+    # --- Settings modals (both persist in DOM, triggers swap with toolbar) ---
+    seg_modal, seg_trigger = render_card_stack_settings_modal(
+        SEG_CS_CONFIG, SEG_CS_IDS,
+        current_count=seg_state.get("visible_count", DEFAULT_VISIBLE_COUNT) if seg_state else DEFAULT_VISIBLE_COUNT,
+        card_width=seg_state.get("card_width", DEFAULT_CARD_WIDTH) if seg_state else DEFAULT_CARD_WIDTH,
+    )
+    align_modal, align_trigger = render_card_stack_settings_modal(
+        ALIGN_CS_CONFIG, ALIGN_CS_IDS,
+        current_count=align_state.get("visible_count", 5) if align_state else 5,
+        card_width=align_state.get("card_width", 40) if align_state else 40,
+    )
+
+    settings_modals_container = Div(
+        seg_modal,
+        align_modal,
+        id=CombinedHtmlIds.SETTINGS_MODALS,
+    )
+
     # --- Toolbar ---
     if is_init and urls:
-        segments = seg_state.get("segments", [])
-        history = seg_state.get("history", [])
-        visible_count = seg_state.get("visible_count", DEFAULT_VISIBLE_COUNT)
-        toolbar_content = render_toolbar(
-            reset_url=urls.reset,
-            ai_split_url=urls.ai_split,
-            undo_url=urls.undo,
-            can_undo=(len(history) > 0),
-            visible_count=visible_count,
-            extra_actions=extra_actions,
-            nltk_split_disabled=nltk_split_disabled,
+        toolbar_content = Div(
+            seg_trigger,
+            render_toolbar(
+                reset_url=urls.reset,
+                ai_split_url=urls.ai_split,
+                undo_url=urls.undo,
+                can_undo=(len(seg_state.get("history", [])) > 0),
+                extra_actions=extra_actions,
+                nltk_split_disabled=nltk_split_disabled,
+            ),
+            cls=combine_classes(flex_display, items.center, gap(2), w.full),
         )
     else:
         toolbar_content = _placeholder("Toolbar actions will appear here based on the active column.")
@@ -258,22 +275,7 @@ def _render_shared_chrome(
         cls=str(p(2))
     )
 
-    # --- Controls ---
-    if is_init:
-        card_width = seg_state.get("card_width", DEFAULT_CARD_WIDTH)
-        controls_content = render_width_slider(SEG_CS_CONFIG, SEG_CS_IDS, card_width=card_width)
-    else:
-        controls_content = _placeholder("Column-specific controls will appear here.")
-
-    controls = Div(
-        controls_content,
-        id=CombinedHtmlIds.SHARED_CONTROLS,
-        cls=str(p(2))
-    )
-
     # --- Footer with both column footers + alignment status ---
-    # Note: seg_state["segments"] and align_state["vad_chunks"] are already deserialized
-    # objects from extract_seg_state/extract_alignment_state — don't call from_dict() again
     seg_segments = seg_state.get("segments", []) if seg_state else []
     segment_count = len(seg_segments)
     align_chunks = align_state.get("vad_chunks", []) if align_state else []
@@ -306,8 +308,7 @@ def _render_shared_chrome(
         )
     )
 
-    return toolbar, controls, footer
-
+    return toolbar, footer, settings_modals_container
 
 # %% ../../nbs/components/step_renderer.ipynb #c9d0e1f2
 # Shared column styling (reused by init handler for outerHTML swap)
@@ -528,7 +529,7 @@ def render_combined_step(
         )
         mini_stats_text = render_seg_mini_stats_text(segments)
 
-        toolbar, controls, footer = _render_shared_chrome(
+        toolbar, footer, settings_modals_container = _render_shared_chrome(
             seg_state=seg_state,
             align_state=align_state,
             urls=seg_urls,
@@ -542,7 +543,7 @@ def render_combined_step(
             mini_stats_text=mini_stats_text,
         )
     else:
-        toolbar, controls, footer = _render_shared_chrome(
+        toolbar, footer, settings_modals_container = _render_shared_chrome(
             align_state=align_state,
         )
         seg_col = _render_seg_column(
@@ -630,7 +631,6 @@ def render_combined_step(
             cls=combine_classes(flex_display, items.start, justify.between),
         ),
         toolbar,
-        controls,
         Div(
             *columns_children,
             id=CombinedHtmlIds.COLUMNS,
@@ -649,6 +649,7 @@ def render_combined_step(
         toolbar_restore_script,
         chrome_switch_btn,
         active_column_input,
+        settings_modals_container,  # Both settings modals persist in DOM
         jm_modal_el,  # Job monitor modal (page-level, outside columns)
         jm_kb_script_el,  # Job monitor keyboard script placeholder (for OOB pause/resume)
         hints_modal,  # Keyboard hints modal dialog
@@ -660,4 +661,3 @@ def render_combined_step(
             p(4), p.x(2), p.b(0)
         )
     )
-

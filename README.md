@@ -47,36 +47,36 @@ graph LR
     routes_init[routes.init<br/>routes/init]
     services_forced_alignment[services.forced_alignment<br/>forced_alignment]
 
-    components_handlers --> html_ids
+    components_handlers --> components_sync_controls
     components_handlers --> components_keyboard_config
+    components_handlers --> html_ids
     components_handlers --> components_step_renderer
     components_handlers --> services_forced_alignment
-    components_handlers --> components_sync_controls
     components_handlers --> routes_forced_alignment
     components_keyboard_config --> html_ids
     components_keyboard_config --> components_sync_controls
+    components_step_renderer --> components_keyboard_config
+    components_step_renderer --> components_toolbar_state
     components_step_renderer --> html_ids
     components_step_renderer --> components_helpers
     components_step_renderer --> components_sync_controls
-    components_step_renderer --> components_keyboard_config
-    components_step_renderer --> components_toolbar_state
     components_toolbar_state --> components_sync_controls
-    routes_chrome --> html_ids
-    routes_chrome --> components_handlers
     routes_chrome --> components_sync_controls
+    routes_chrome --> components_handlers
+    routes_chrome --> html_ids
     routes_chrome --> components_step_renderer
+    routes_forced_alignment --> components_sync_controls
     routes_forced_alignment --> html_ids
     routes_forced_alignment --> components_step_renderer
-    routes_forced_alignment --> components_sync_controls
     routes_init --> components_keyboard_config
-    routes_init --> html_ids
-    routes_init --> components_handlers
     routes_init --> models
+    routes_init --> components_handlers
+    routes_init --> html_ids
     routes_init --> services_forced_alignment
-    routes_init --> components_sync_controls
-    routes_init --> components_step_renderer
-    routes_init --> routes_forced_alignment
     routes_init --> routes_chrome
+    routes_init --> routes_forced_alignment
+    routes_init --> components_step_renderer
+    routes_init --> components_sync_controls
 ```
 
 *30 cross-module dependencies detected*
@@ -121,6 +121,7 @@ async def _handle_switch_chrome(
     
     Client-side toolbar state restoration (sync button, auto-play toggle)
     is handled by the centralized settle handler from toolbar_state.py.
+    Settings modals persist in the DOM — only the trigger buttons swap.
     """
 ```
 
@@ -443,9 +444,6 @@ def create_seg_mutation_wrapper(
     Calls the _result handler variant, builds targeted OOB response with FA
     controls in toolbar, and appends alignment status + mini-stats OOB.
     Computes nltk_split_disabled from state for toolbar rendering.
-    
-    When clear_fa_presplit=True (used for NLTK Split), clears the FA pre-split
-    snapshot so the toggle is replaced with the Force Align button.
     """
 ```
 
@@ -473,6 +471,7 @@ def create_seg_init_chrome_wrapper(
     
     Saves nltk_presplit snapshot at init time for match detection.
     FA controls are rendered in the toolbar via extra_actions.
+    Settings modals are rendered in a persistent container (both seg + align).
     """
 ```
 
@@ -806,7 +805,7 @@ def _render_shared_chrome(
     urls:SegmentationUrls=None,  # Segmentation URL bundle (required when seg_state provided)
     extra_actions:tuple=(),  # Extra toolbar elements (FA controls, sync toggle, etc.)
     nltk_split_disabled:bool=False,  # Whether NLTK Split button is disabled
-) -> tuple:  # (toolbar, controls, footer)
+) -> tuple:  # (toolbar, footer, settings_modals_container)
     """
     Render shared chrome containers, populated with segmentation content when initialized.
     

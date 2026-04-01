@@ -16,10 +16,12 @@ from typing import Callable, Any, Dict, List, Optional, Tuple
 from fasthtml.common import Div, Span, Button, FT
 
 from cjm_fasthtml_interactions.core.state_store import get_session_id
-from cjm_fasthtml_card_stack.components.controls import render_width_slider
+from cjm_fasthtml_card_stack.components.settings_modal import render_card_stack_settings_modal, render_settings_trigger
 from cjm_fasthtml_card_stack.core.constants import DEFAULT_VISIBLE_COUNT
 from cjm_fasthtml_daisyui.components.data_display.badge import badge, badge_styles, badge_sizes
+from cjm_fasthtml_tailwind.utilities.sizing import w
 from cjm_fasthtml_tailwind.utilities.layout import display_tw
+from cjm_fasthtml_tailwind.utilities.flexbox_and_grid import flex_display, items, gap
 from cjm_fasthtml_tailwind.core.base import combine_classes
 
 from ..html_ids import CombinedHtmlIds
@@ -277,9 +279,6 @@ def create_seg_mutation_wrapper(
     Calls the _result handler variant, builds targeted OOB response with FA
     controls in toolbar, and appends alignment status + mini-stats OOB.
     Computes nltk_split_disabled from state for toolbar rendering.
-    
-    When clear_fa_presplit=True (used for NLTK Split), clears the FA pre-split
-    snapshot so the toggle is replaced with the Force Align button.
     """
     @wraps(handler_result)
     async def wrapped(
@@ -333,14 +332,13 @@ def create_seg_mutation_wrapper(
         urls = kwargs.get("urls")
         seg_oob = build_mutation_response(
             result.segment_dicts, result.focused_index, result.visible_count,
-            result.history_depth, urls, is_auto_mode=result.is_auto_mode,
+            result.history_depth, urls,
             extra_actions=build_extra_actions(fa_extra), nltk_split_disabled=nltk_disabled,
         )
 
         return (*seg_oob, *result.extra_oob, *alignment_status_oob, *mini_stats_oob)
 
     return wrapped
-
 
 # %% ../../nbs/components/handlers.ipynb #f6a7b8c9
 def wrap_align_mutation_handler(
@@ -388,6 +386,7 @@ def create_seg_init_chrome_wrapper(
     
     Saves nltk_presplit snapshot at init time for match detection.
     FA controls are rendered in the toolbar via extra_actions.
+    Settings modals are rendered in a persistent container (both seg + align).
     """
     async def wrapped_seg_init(
         state_store:WorkflowStateStore,
@@ -455,24 +454,43 @@ def create_seg_init_chrome_wrapper(
             seg_state, jm_trigger, fa_toggle_url, fa_available,
         )
         
-        # Toolbar OOB (with FA controls in extra_actions, NLTK Split disabled at init)
+        # Settings modal trigger for seg column
+        settings_trigger = render_settings_trigger(modal_id=SEG_CS_IDS.settings_modal)
+        
+        # Toolbar OOB (settings trigger + toolbar with FA controls, NLTK Split disabled at init)
         toolbar_oob = Div(
-            render_toolbar(
-                reset_url=urls.reset, ai_split_url=urls.ai_split, undo_url=urls.undo,
-                can_undo=(result.history_depth > 0),
-                visible_count=result.visible_count,
-                is_auto_mode=result.is_auto_mode,
-                extra_actions=build_extra_actions(fa_extra),
-                nltk_split_disabled=True,
+            Div(
+                settings_trigger,
+                render_toolbar(
+                    reset_url=urls.reset, ai_split_url=urls.ai_split, undo_url=urls.undo,
+                    can_undo=(result.history_depth > 0),
+                    extra_actions=build_extra_actions(fa_extra),
+                    nltk_split_disabled=True,
+                ),
+                cls=combine_classes(flex_display, items.center, gap(2), w.full),
             ),
             id=CombinedHtmlIds.SHARED_TOOLBAR,
             hx_swap_oob="innerHTML"
         )
         
-        # Controls OOB (width slider)
-        controls_oob = Div(
-            render_width_slider(SEG_CS_CONFIG, SEG_CS_IDS, card_width=result.card_width),
-            id=CombinedHtmlIds.SHARED_CONTROLS,
+        # Settings modals OOB (both seg + align persist in DOM)
+        from cjm_transcript_vad_align.components.card_stack_config import (
+            ALIGN_CS_CONFIG, ALIGN_CS_IDS,
+        )
+        seg_modal, _ = render_card_stack_settings_modal(
+            SEG_CS_CONFIG, SEG_CS_IDS,
+            current_count=result.visible_count,
+            card_width=result.card_width,
+        )
+        align_modal, _ = render_card_stack_settings_modal(
+            ALIGN_CS_CONFIG, ALIGN_CS_IDS,
+            current_count=align_state.get("visible_count", 5),
+            card_width=align_state.get("card_width", 40),
+        )
+        settings_modals_oob = Div(
+            seg_modal,
+            align_modal,
+            id=CombinedHtmlIds.SETTINGS_MODALS,
             hx_swap_oob="innerHTML"
         )
         
@@ -499,11 +517,10 @@ def create_seg_init_chrome_wrapper(
         
         return (
             result.column_body, kb_system_oob, zone_change_js, chrome_switch_btn,
-            toolbar_oob, controls_oob, footer_oob, mini_stats_oob,
+            toolbar_oob, settings_modals_oob, footer_oob, mini_stats_oob,
         )
     
     return wrapped_seg_init
-
 
 # %% ../../nbs/components/handlers.ipynb #ecvyiypdxk
 def create_align_init_chrome_wrapper(

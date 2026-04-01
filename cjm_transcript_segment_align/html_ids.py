@@ -21,9 +21,9 @@ class CombinedHtmlIds:
     # Shared Chrome
     SHARED_HINTS = "sd-shared-hints"
     SHARED_TOOLBAR = "sd-shared-toolbar"
-    SHARED_CONTROLS = "sd-shared-controls"
     SHARED_FOOTER = "sd-shared-footer"
     ALIGNMENT_STATUS = "sd-alignment-status"
+    SETTINGS_MODALS = "sd-settings-modals"
 
     # Segmentation Column
     SEG_COLUMN = "sd-seg-column"
