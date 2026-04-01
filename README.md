@@ -12,12 +12,13 @@ pip install cjm_transcript_segment_align
 ## Project Structure
 
     nbs/
-    ├── components/ (5)
+    ├── components/ (6)
     │   ├── handlers.ipynb         # Handler wrappers for cross-domain coordination (alignment status updates)
     │   ├── helpers.ipynb          # State extraction helpers for cross-domain coordination in Phase 2 combined step
     │   ├── keyboard_config.ipynb  # Shared keyboard navigation configuration for the combined Phase 2 step
     │   ├── step_renderer.ipynb    # Phase 2 combined step renderer: dual-column layout for Segment & Align
-    │   └── sync_controls.ipynb    # Synced navigation toggle for the combined Phase 2 dual-column step
+    │   ├── sync_controls.ipynb    # Synced navigation toggle for the combined Phase 2 dual-column step
+    │   └── toolbar_state.ipynb    # Centralized client-side toolbar state restoration after HTMX settles
     ├── routes/ (3)
     │   ├── chrome.ipynb            # Shared chrome switching route handlers for the combined Phase 2 step
     │   ├── forced_alignment.ipynb  # Routes for toggling between NLTK and force-aligned pre-splits, plus rendering helpers for FA UI controls. Trigger and progress are handled by `cjm-fasthtml-job-monitor`.
@@ -27,7 +28,7 @@ pip install cjm_transcript_segment_align
     ├── html_ids.ipynb  # HTML ID constants for Phase 2 Shell: Dual-Column Layout shared chrome
     └── models.ipynb    # Data types and result containers for the segment-align integration surface
 
-Total: 11 notebooks across 3 directories
+Total: 12 notebooks across 3 directories
 
 ## Module Dependencies
 
@@ -38,6 +39,7 @@ graph LR
     components_keyboard_config[components.keyboard_config<br/>keyboard_config]
     components_step_renderer[components.step_renderer<br/>step_combined]
     components_sync_controls[components.sync_controls<br/>sync_controls]
+    components_toolbar_state[components.toolbar_state<br/>toolbar_state]
     html_ids[html_ids<br/>html_ids]
     models[models<br/>models]
     routes_chrome[routes.chrome<br/>chrome]
@@ -45,36 +47,39 @@ graph LR
     routes_init[routes.init<br/>routes/init]
     services_forced_alignment[services.forced_alignment<br/>forced_alignment]
 
-    components_handlers --> components_step_renderer
     components_handlers --> html_ids
+    components_handlers --> components_keyboard_config
+    components_handlers --> components_step_renderer
     components_handlers --> services_forced_alignment
     components_handlers --> components_sync_controls
-    components_handlers --> components_keyboard_config
     components_handlers --> routes_forced_alignment
     components_keyboard_config --> html_ids
     components_keyboard_config --> components_sync_controls
+    components_step_renderer --> html_ids
     components_step_renderer --> components_helpers
     components_step_renderer --> components_sync_controls
     components_step_renderer --> components_keyboard_config
-    components_step_renderer --> html_ids
-    routes_chrome --> components_handlers
+    components_step_renderer --> components_toolbar_state
+    components_toolbar_state --> components_sync_controls
     routes_chrome --> html_ids
-    routes_chrome --> components_step_renderer
+    routes_chrome --> components_handlers
     routes_chrome --> components_sync_controls
-    routes_forced_alignment --> components_step_renderer
+    routes_chrome --> components_step_renderer
     routes_forced_alignment --> html_ids
-    routes_init --> components_handlers
-    routes_init --> html_ids
-    routes_init --> models
-    routes_init --> routes_chrome
-    routes_init --> routes_forced_alignment
-    routes_init --> services_forced_alignment
+    routes_forced_alignment --> components_step_renderer
+    routes_forced_alignment --> components_sync_controls
     routes_init --> components_keyboard_config
+    routes_init --> html_ids
+    routes_init --> components_handlers
+    routes_init --> models
+    routes_init --> services_forced_alignment
     routes_init --> components_sync_controls
     routes_init --> components_step_renderer
+    routes_init --> routes_forced_alignment
+    routes_init --> routes_chrome
 ```
 
-*27 cross-module dependencies detected*
+*30 cross-module dependencies detected*
 
 ## CLI Reference
 
@@ -100,17 +105,6 @@ from cjm_transcript_segment_align.routes.chrome import (
 #### Functions
 
 ``` python
-def _restore_align_auto_nav_js() -> str
-    """
-    Generate JS to sync the auto-navigate toggle checkbox and color classes with the Web Audio state.
-    
-    After chrome switch re-renders the toolbar, the checkbox starts unchecked with bg-error.
-    This reads the JS state (source of truth) and restores the checkbox + color classes.
-    Included inside the toolbar OOB so it runs after HTMX inserts the new content.
-    """
-```
-
-``` python
 async def _handle_switch_chrome(
     state_store:SQLiteWorkflowStateStore,  # State store instance
     workflow_id:str,  # Workflow identifier
@@ -122,7 +116,12 @@ async def _handle_switch_chrome(
     fa_toggle_url:str="",  # URL for FA toggle route
     fa_available:bool=False,  # Whether FA plugin is available
 ) -> tuple:  # OOB swaps for shared chrome containers
-    "Switch shared chrome content based on active column."
+    """
+    Switch shared chrome content based on active column.
+    
+    Client-side toolbar state restoration (sync button, auto-play toggle)
+    is handled by the centralized settle handler from toolbar_state.py.
+    """
 ```
 
 ``` python
@@ -890,6 +889,7 @@ from cjm_transcript_segment_align.components.sync_controls import (
     generate_sync_script,
     generate_sync_key_toggle_js,
     generate_should_play_js,
+    generate_sync_restore_js,
     build_extra_actions
 )
 ```
@@ -927,6 +927,17 @@ def generate_should_play_js() -> str:  # JS defining window.shouldAlignPlay
 ```
 
 ``` python
+def generate_sync_restore_js() -> str:  # JS to restore sync button styling from client state
+    """
+    Generate JS to sync the toolbar button styling with the client-side sync state.
+    
+    After chrome switch re-renders the seg toolbar, the sync button starts
+    with btn-outline. This reads the JS state and restores btn-primary if
+    sync is enabled.
+    """
+```
+
+``` python
 def build_extra_actions(
     fa_extra:Any=None,  # FA controls element (from build_fa_extra_actions, or None)
 ) -> tuple:  # Tuple of toolbar extra action elements
@@ -934,6 +945,8 @@ def build_extra_actions(
     Build the extra_actions tuple for the seg toolbar.
     
     Combines FA controls (if available) with the sync toggle button.
+    Client-side state restoration (sync button styling) is handled by
+    the centralized toolbar restore settle handler in toolbar_state.py.
     Returns a tuple compatible with render_toolbar(extra_actions=...).
     """
 ```
@@ -945,4 +958,34 @@ SYNC_TOGGLE_FN = 'toggleSegAlignSync'
 SYNC_KEY = '_segAlignSync'
 SYNC_BTN_ID = 'sd-sync-toggle-btn'
 SHOULD_PLAY_FN = 'shouldAlignPlay'
+```
+
+### toolbar_state (`toolbar_state.ipynb`)
+
+> Centralized client-side toolbar state restoration after HTMX settles
+
+#### Import
+
+``` python
+from cjm_transcript_segment_align.components.toolbar_state import (
+    generate_toolbar_restore_js
+)
+```
+
+#### Functions
+
+``` python
+def generate_toolbar_restore_js() -> Script:  # Script element with settle handler
+    """
+    Generate the centralized toolbar state restore settle handler.
+    
+    Restores client-side state for all toolbar toggles/buttons after any
+    HTMX settle that re-renders the toolbar. Runs once per settle event.
+    """
+```
+
+#### Variables
+
+``` python
+_TOOLBAR_RESTORE_KEY = '_sdToolbarRestoreHandler'
 ```

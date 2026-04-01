@@ -30,6 +30,7 @@ from ..html_ids import CombinedHtmlIds
 from cjm_transcript_segment_align.components.step_renderer import (
     render_alignment_status, render_seg_mini_stats_badge,
 )
+from ..components.sync_controls import build_extra_actions
 
 # %% ../../nbs/routes/forced_alignment.ipynb #cell-ids
 # Stable ID for FA controls area within toolbar (progress polling target)
@@ -144,14 +145,14 @@ async def _handle_fa_toggle(
     # NLTK Split disabled when target is NLTK
     nltk_disabled = (target_mode == "nltk")
 
-    # Build targeted mutation response
+    # Build targeted mutation response (uses build_extra_actions for full toolbar tuple)
     seg_oob = build_mutation_response(
         segment_dicts=target_segments,
         focused_index=0,
         visible_count=seg_state.get("visible_count", DEFAULT_VISIBLE_COUNT),
         history_depth=len(history),
         urls=seg_urls,
-        extra_actions=fa_toggle_content,
+        extra_actions=build_extra_actions(fa_toggle_content),
         nltk_split_disabled=nltk_disabled,
     )
 

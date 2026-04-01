@@ -8,7 +8,7 @@ __all__ = ['DEBUG_SWITCH_CHROME', 'init_chrome_router']
 # %% ../../nbs/routes/chrome.ipynb #c3d4e5f6
 from typing import Tuple, Dict, Callable
 
-from fasthtml.common import APIRouter, Div, Script
+from fasthtml.common import APIRouter, Div
 
 from cjm_fasthtml_card_stack.components.controls import render_width_slider
 from cjm_fasthtml_card_stack.core.constants import DEFAULT_VISIBLE_COUNT, DEFAULT_CARD_WIDTH
@@ -34,9 +34,6 @@ from cjm_transcript_segmentation.components.card_stack_config import (
 from cjm_transcript_vad_align.components.step_renderer import (
     render_align_toolbar, render_align_footer_content,
 )
-from cjm_transcript_vad_align.components.audio_controls import (
-    AlignAudioControlIds, _TOGGLE_BG_OFF, _TOGGLE_BG_ON,
-)
 from cjm_transcript_vad_align.components.card_stack_config import (
     ALIGN_CS_CONFIG, ALIGN_CS_IDS,
 )
@@ -50,34 +47,10 @@ from cjm_transcript_segment_align.components.handlers import (
 )
 from ..components.sync_controls import build_extra_actions
 
-# Web Audio state key for auto-navigate restore
-from cjm_transcript_vad_align.components.callbacks import ALIGN_AUDIO_CONFIG
-
 
 DEBUG_SWITCH_CHROME = False
 
-
 # %% ../../nbs/routes/chrome.ipynb #e5f6a7b8
-def _restore_align_auto_nav_js() -> str:
-    """Generate JS to sync the auto-navigate toggle checkbox and color classes with the Web Audio state.
-    
-    After chrome switch re-renders the toolbar, the checkbox starts unchecked with bg-error.
-    This reads the JS state (source of truth) and restores the checkbox + color classes.
-    Included inside the toolbar OOB so it runs after HTMX inserts the new content.
-    """
-    sk = ALIGN_AUDIO_CONFIG.state_key
-    toggle_id = AlignAudioControlIds.AUTO_NAV_TOGGLE
-    return f"""
-        var _cb = document.getElementById('{toggle_id}');
-        if (_cb && window.{sk}) {{
-            var _on = window.{sk}.autoNavigate || false;
-            _cb.checked = _on;
-            _cb.classList.remove('{_TOGGLE_BG_OFF}', '{_TOGGLE_BG_ON}');
-            _cb.classList.add(_on ? '{_TOGGLE_BG_ON}' : '{_TOGGLE_BG_OFF}');
-        }}
-    """
-
-
 async def _handle_switch_chrome(
     state_store:SQLiteWorkflowStateStore,  # State store instance
     workflow_id:str,  # Workflow identifier
@@ -89,7 +62,11 @@ async def _handle_switch_chrome(
     fa_toggle_url:str="",  # URL for FA toggle route
     fa_available:bool=False,  # Whether FA plugin is available
 ) -> tuple:  # OOB swaps for shared chrome containers
-    """Switch shared chrome content based on active column."""
+    """Switch shared chrome content based on active column.
+    
+    Client-side toolbar state restoration (sync button, auto-play toggle)
+    is handled by the centralized settle handler from toolbar_state.py.
+    """
     form = await request.form()
     active_column = form.get("active_column", "seg")
 
@@ -141,14 +118,9 @@ async def _handle_switch_chrome(
         is_auto_mode = align_state.get("is_auto_mode", False)
         card_width = align_state.get("card_width", 40)
 
-        # Toolbar now includes auto-play toggle internally;
-        # restore script syncs checkbox + color classes with JS state after re-render
-        toolbar_content = Div(
-            render_align_toolbar(
-                visible_count=visible_count,
-                is_auto_mode=is_auto_mode,
-            ),
-            Script(_restore_align_auto_nav_js()),
+        toolbar_content = render_align_toolbar(
+            visible_count=visible_count,
+            is_auto_mode=is_auto_mode,
         )
         controls_content = render_width_slider(ALIGN_CS_CONFIG, ALIGN_CS_IDS, card_width=card_width)
 
@@ -182,7 +154,6 @@ async def _handle_switch_chrome(
     )
 
     return (toolbar_oob, controls_oob, footer_oob)
-
 
 # %% ../../nbs/routes/chrome.ipynb #g7b8c9d0
 def init_chrome_router(

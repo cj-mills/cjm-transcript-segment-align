@@ -83,6 +83,7 @@ from cjm_transcript_segment_align.components.sync_controls import (
     build_extra_actions, generate_sync_script,
     generate_should_play_js, SHOULD_PLAY_FN,
 )
+from .toolbar_state import generate_toolbar_restore_js
 
 # Debug flag for combined step rendering tracing (set False in production)
 DEBUG_COMBINED_RENDER = True
@@ -497,12 +498,14 @@ def render_combined_step(
     # (stacks auto-init via hx_trigger="load", these must already be in the DOM)
     sync_script = None
     should_play_script = None
+    toolbar_restore_script = None
     if align_urls:
         sync_script = generate_sync_script(
             source_input_id=SEG_CS_IDS.focused_index_input,
             target_nav_url=align_urls.card_stack.nav_to_index,
         )
         should_play_script = Script(generate_should_play_js())
+        toolbar_restore_script = generate_toolbar_restore_js()
 
     if is_seg_init:
         segments = seg_state["segments"]
@@ -643,6 +646,7 @@ def render_combined_step(
         zone_change_js,
         sync_script,
         should_play_script,
+        toolbar_restore_script,
         chrome_switch_btn,
         active_column_input,
         jm_modal_el,  # Job monitor modal (page-level, outside columns)

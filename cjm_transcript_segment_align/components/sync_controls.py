@@ -4,7 +4,7 @@
 
 # %% auto #0
 __all__ = ['SYNC_TOGGLE_FN', 'SYNC_KEY', 'SYNC_BTN_ID', 'SHOULD_PLAY_FN', 'render_sync_toggle_button', 'generate_sync_script',
-           'generate_sync_key_toggle_js', 'generate_should_play_js', 'build_extra_actions']
+           'generate_sync_key_toggle_js', 'generate_should_play_js', 'generate_sync_restore_js', 'build_extra_actions']
 
 # %% ../../nbs/components/sync_controls.ipynb #sync-imports
 from typing import Any
@@ -106,6 +106,23 @@ def generate_should_play_js() -> str:  # JS defining window.shouldAlignPlay
         return false;
     }};"""
 
+# %% ../../nbs/components/sync_controls.ipynb #6l3m1ira3gd
+def generate_sync_restore_js() -> str:  # JS to restore sync button styling from client state
+    """Generate JS to sync the toolbar button styling with the client-side sync state.
+    
+    After chrome switch re-renders the seg toolbar, the sync button starts
+    with btn-outline. This reads the JS state and restores btn-primary if
+    sync is enabled.
+    """
+    return f"""
+        var _sb = document.getElementById('{SYNC_BTN_ID}');
+        if (_sb && window.{SYNC_KEY}) {{
+            var _on = window.{SYNC_KEY}.enabled || false;
+            _sb.classList.toggle('btn-primary', _on);
+            _sb.classList.toggle('btn-outline', !_on);
+        }}
+    """
+
 # %% ../../nbs/components/sync_controls.ipynb #mggeymhntih
 def build_extra_actions(
     fa_extra:Any=None,  # FA controls element (from build_fa_extra_actions, or None)
@@ -113,6 +130,8 @@ def build_extra_actions(
     """Build the extra_actions tuple for the seg toolbar.
     
     Combines FA controls (if available) with the sync toggle button.
+    Client-side state restoration (sync button styling) is handled by
+    the centralized toolbar restore settle handler in toolbar_state.py.
     Returns a tuple compatible with render_toolbar(extra_actions=...).
     """
     actions = []
