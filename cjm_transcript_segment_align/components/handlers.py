@@ -31,6 +31,7 @@ from cjm_transcript_segment_align.components.keyboard_config import (
     build_combined_kb_system,
     generate_zone_change_js, SWITCH_CHROME_BTN_ID,
 )
+from .sync_controls import build_extra_actions
 from cjm_transcript_segmentation.models import TextSegment, SegmentationUrls
 from cjm_transcript_segmentation.routes.core import WorkflowStateStore
 from cjm_transcript_segmentation.routes.handlers import (
@@ -249,7 +250,7 @@ def build_fa_on_complete(
             visible_count=seg_state.get("visible_count", DEFAULT_VISIBLE_COUNT),
             history_depth=0,
             urls=seg_urls,
-            extra_actions=fa_toggle,
+            extra_actions=build_extra_actions(fa_toggle),
             nltk_split_disabled=False,
         )
 
@@ -333,12 +334,13 @@ def create_seg_mutation_wrapper(
         seg_oob = build_mutation_response(
             result.segment_dicts, result.focused_index, result.visible_count,
             result.history_depth, urls, is_auto_mode=result.is_auto_mode,
-            extra_actions=fa_extra, nltk_split_disabled=nltk_disabled,
+            extra_actions=build_extra_actions(fa_extra), nltk_split_disabled=nltk_disabled,
         )
 
         return (*seg_oob, *result.extra_oob, *alignment_status_oob, *mini_stats_oob)
 
     return wrapped
+
 
 # %% ../../nbs/components/handlers.ipynb #f6a7b8c9
 def wrap_align_mutation_handler(
@@ -460,7 +462,7 @@ def create_seg_init_chrome_wrapper(
                 can_undo=(result.history_depth > 0),
                 visible_count=result.visible_count,
                 is_auto_mode=result.is_auto_mode,
-                extra_actions=fa_extra,
+                extra_actions=build_extra_actions(fa_extra),
                 nltk_split_disabled=True,
             ),
             id=CombinedHtmlIds.SHARED_TOOLBAR,
@@ -502,8 +504,11 @@ def create_seg_init_chrome_wrapper(
     
     return wrapped_seg_init
 
+
 # %% ../../nbs/components/handlers.ipynb #ecvyiypdxk
-def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds alignment status
+def create_align_init_chrome_wrapper(
+    should_play_fn:str="",  # Consumer-defined play guard function name
+) -> Callable:  # Wrapped handler that adds alignment status
     """Create a wrapper for align init that adds mini-stats and alignment status.
     
     Returns a footer OOB (not a standalone alignment status badge) to avoid
@@ -528,6 +533,7 @@ def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds
         result: AlignInitResult = await _handle_align_init(
             state_store, workflow_id, source_service, alignment_service,
             request, sess, urls, visible_count, card_width,
+            should_play_fn=should_play_fn,
         )
         
         session_id = get_session_id(sess)
@@ -557,6 +563,7 @@ def create_align_init_chrome_wrapper() -> Callable:  # Wrapped handler that adds
         return (result.column_body, mini_stats_oob, footer_oob)
     
     return wrapped_align_init
+
 
 # %% ../../nbs/components/handlers.ipynb #b8c9d0e1
 def create_seg_mutation_wrappers(

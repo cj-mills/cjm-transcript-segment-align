@@ -48,12 +48,14 @@ from cjm_transcript_segment_align.components.step_renderer import (
 from cjm_transcript_segment_align.components.handlers import (
     build_fa_extra_actions, segments_match_presplit,
 )
+from ..components.sync_controls import build_extra_actions
 
 # Web Audio state key for auto-navigate restore
 from cjm_transcript_vad_align.components.callbacks import ALIGN_AUDIO_CONFIG
 
 
 DEBUG_SWITCH_CHROME = False
+
 
 # %% ../../nbs/routes/chrome.ipynb #e5f6a7b8
 def _restore_align_auto_nav_js() -> str:
@@ -129,7 +131,7 @@ async def _handle_switch_chrome(
             can_undo=(len(history) > 0),
             visible_count=visible_count,
             is_auto_mode=is_auto_mode,
-            extra_actions=fa_extra,
+            extra_actions=build_extra_actions(fa_extra),
             nltk_split_disabled=nltk_disabled,
         )
         controls_content = render_width_slider(SEG_CS_CONFIG, SEG_CS_IDS, card_width=card_width)
@@ -180,6 +182,7 @@ async def _handle_switch_chrome(
     )
 
     return (toolbar_oob, controls_oob, footer_oob)
+
 
 # %% ../../nbs/routes/chrome.ipynb #g7b8c9d0
 def init_chrome_router(

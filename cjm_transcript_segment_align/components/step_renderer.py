@@ -10,7 +10,7 @@ __all__ = ['DEBUG_COMBINED_RENDER', 'render_seg_mini_stats_badge', 'render_align
 # %% ../../nbs/components/step_renderer.ipynb #c3d4e5f6
 from typing import Any, List
 
-from fasthtml.common import Div, H2, P, Span, Input, Button
+from fasthtml.common import Div, H2, P, Span, Input, Button, Script
 
 # DaisyUI components
 from cjm_fasthtml_daisyui.components.data_display.badge import badge, badge_styles, badge_sizes
@@ -78,8 +78,15 @@ from cjm_transcript_segmentation.components.card_stack_config import (
     SEG_CS_CONFIG, SEG_CS_IDS,
 )
 
+# Sync controls
+from cjm_transcript_segment_align.components.sync_controls import (
+    build_extra_actions, generate_sync_script,
+    generate_should_play_js, SHOULD_PLAY_FN,
+)
+
 # Debug flag for combined step rendering tracing (set False in production)
 DEBUG_COMBINED_RENDER = True
+
 
 # %% ../../nbs/components/step_renderer.ipynb #e5f6a7b8
 def _render_column_header(
@@ -217,7 +224,7 @@ def _render_shared_chrome(
     seg_state:dict=None,  # Extracted segmentation state (None = show placeholders)
     align_state:dict=None,  # Extracted alignment state (None = no VAD data yet)
     urls:SegmentationUrls=None,  # Segmentation URL bundle (required when seg_state provided)
-    fa_extra_actions:Any=None,  # FA controls for toolbar extra_actions slot
+    extra_actions:tuple=(),  # Extra toolbar elements (FA controls, sync toggle, etc.)
     nltk_split_disabled:bool=False,  # Whether NLTK Split button is disabled
 ) -> tuple:  # (toolbar, controls, footer)
     """Render shared chrome containers, populated with segmentation content when initialized.
@@ -238,7 +245,7 @@ def _render_shared_chrome(
             undo_url=urls.undo,
             can_undo=(len(history) > 0),
             visible_count=visible_count,
-            extra_actions=fa_extra_actions,
+            extra_actions=extra_actions,
             nltk_split_disabled=nltk_split_disabled,
         )
     else:
@@ -299,6 +306,7 @@ def _render_shared_chrome(
     )
 
     return toolbar, controls, footer
+
 
 # %% ../../nbs/components/step_renderer.ipynb #c9d0e1f2
 # Shared column styling (reused by init handler for outerHTML swap)
@@ -481,9 +489,20 @@ def render_combined_step(
     if align_urls:
         kb_manager, _ = build_combined_kb_system(seg_urls, align_urls)
 
-    # Variables for KB system (only built when initialized)
+    # Variables for KB system and sync (only built when initialized)
     kb_system = None
     zone_change_js = None
+
+    # Sync JS + should-play guard — generated unconditionally so they're available on first page load
+    # (stacks auto-init via hx_trigger="load", these must already be in the DOM)
+    sync_script = None
+    should_play_script = None
+    if align_urls:
+        sync_script = generate_sync_script(
+            source_input_id=SEG_CS_IDS.focused_index_input,
+            target_nav_url=align_urls.card_stack.nav_to_index,
+        )
+        should_play_script = Script(generate_should_play_js())
 
     if is_seg_init:
         segments = seg_state["segments"]
@@ -510,7 +529,7 @@ def render_combined_step(
             seg_state=seg_state,
             align_state=align_state,
             urls=seg_urls,
-            fa_extra_actions=fa_extra,
+            extra_actions=build_extra_actions(fa_extra),
             nltk_split_disabled=nltk_disabled,
         )
 
@@ -546,6 +565,7 @@ def render_combined_step(
             urls=align_urls,
             kb_system=None,
             audio_urls=audio_urls,
+            should_play_fn=SHOULD_PLAY_FN,
         )
         align_mini_text = render_align_mini_stats_text(chunks)
         align_col = _render_alignment_column(
@@ -621,6 +641,8 @@ def render_combined_step(
         footer,
         kb_container,
         zone_change_js,
+        sync_script,
+        should_play_script,
         chrome_switch_btn,
         active_column_input,
         jm_modal_el,  # Job monitor modal (page-level, outside columns)
@@ -634,3 +656,4 @@ def render_combined_step(
             p(4), p.x(2), p.b(0)
         )
     )
+

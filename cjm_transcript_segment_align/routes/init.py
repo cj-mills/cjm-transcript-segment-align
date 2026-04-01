@@ -33,6 +33,7 @@ from cjm_transcript_segment_align.components.handlers import (
 )
 from ..components.step_renderer import render_combined_step
 from ..components.keyboard_config import KB_SYSTEM_ID
+from ..components.sync_controls import SHOULD_PLAY_FN
 from ..html_ids import CombinedHtmlIds
 from ..models import SegmentAlignUrls, SegmentAlignResult
 
@@ -88,7 +89,7 @@ def init_segment_align_routers(
     # 2. Initialize sub-library routers
     # -----------------------------------------------------------------
     # Alignment routers (with combined init wrapper)
-    wrapped_align_init = create_align_init_chrome_wrapper()
+    wrapped_align_init = create_align_init_chrome_wrapper(should_play_fn=SHOULD_PLAY_FN)
 
     align_routers, align_urls, align_routes = init_alignment_routers(
         state_store=state_store,
@@ -331,3 +332,4 @@ def init_segment_align_routers(
     )
 
     return all_routers, result
+

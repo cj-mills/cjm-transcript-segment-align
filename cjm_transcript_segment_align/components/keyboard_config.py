@@ -16,6 +16,7 @@ from cjm_fasthtml_tailwind.core.base import combine_classes
 
 # Keyboard navigation library
 from cjm_fasthtml_keyboard_navigation.core.manager import ZoneManager
+from cjm_fasthtml_keyboard_navigation.core.actions import KeyAction
 from cjm_fasthtml_keyboard_navigation.components.system import render_keyboard_system
 
 # Card stack library
@@ -46,6 +47,11 @@ from cjm_transcript_vad_align.components.card_stack_config import (
 # URL bundles
 from cjm_transcript_segmentation.models import SegmentationUrls
 from cjm_transcript_vad_align.models import AlignmentUrls
+
+# Sync controls
+from cjm_transcript_segment_align.components.sync_controls import (
+    generate_sync_key_toggle_js,
+)
 
 # Debug flag for keyboard system tracing (set False in production)
 DEBUG_KB_SYSTEM = True
@@ -86,11 +92,21 @@ def build_combined_kb_system(
         print(f"[KB_SYSTEM] seg_actions count: {len(seg_actions)}")
         print(f"[KB_SYSTEM] align_actions count: {len(align_actions)}")
 
+    # Synced navigation toggle — S key (active in seg zone only, not in split mode)
+    sync_action = KeyAction(
+        key="s",
+        js_callback="_segAlignSyncKeyToggle",
+        zone_ids=(seg_zone.id,),
+        not_modes=("split",),
+        description="Toggle synced navigation",
+        hint_group="Sync",
+    )
+
     # Combine modes (only segmentation has split mode)
     all_modes = (*seg_modes, *align_modes)
 
-    # Combine actions from both zones
-    all_actions = (*seg_actions, *align_actions)
+    # Combine actions from both zones + sync
+    all_actions = (*seg_actions, *align_actions, sync_action)
 
     # Assemble into ZoneManager with zone switching enabled
     kb_manager = ZoneManager(
@@ -205,6 +221,9 @@ def generate_zone_change_js(
             }}
         """
 
+    # Sync key toggle wrapper JS (S key → toggle sync + update button)
+    sync_key_js = generate_sync_key_toggle_js()
+
     js_code = f"""
     (function() {{
         const seg_zone_id = '{seg_zone_id}';
@@ -250,6 +269,9 @@ def generate_zone_change_js(
             updateColumnStyles(newZoneId);
             {chrome_swap_js}
         }};
+
+        // Sync key toggle wrapper (S key → toggle + update button styling)
+        {sync_key_js}
 
         // Click handler for column focus switching
         function handleColumnClick(targetZoneId) {{
