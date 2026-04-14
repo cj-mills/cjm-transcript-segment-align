@@ -119,11 +119,16 @@ async def _handle_switch_chrome(
             cls=combine_classes(flex_display, items.center, gap(2), w.full),
         )
     else:
-        # Alignment chrome (settings trigger + auto-play toggle)
+        # Alignment chrome (settings trigger + speed selector + auto-play toggle)
+        # Read persisted state so chrome switches restore the user's current speed + auto-nav
         settings_trigger = render_settings_trigger(modal_id=ALIGN_CS_IDS.settings_modal)
         toolbar_content = Div(
             settings_trigger,
-            render_align_toolbar(),
+            render_align_toolbar(
+                current_speed=align_state.get("playback_speed", 1.0),
+                auto_navigate=align_state.get("auto_navigate", False),
+                speed_url=align_urls.speed_change,
+            ),
             cls=combine_classes(flex_display, items.center, gap(2), w.full),
         )
 
