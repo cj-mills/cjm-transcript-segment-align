@@ -66,6 +66,7 @@ def extract_alignment_state(
         "media_paths": state.get("media_paths", []),
         "audio_duration": state.get("audio_duration"),
         "is_auto_mode": state.get("is_auto_mode", False),
+        "playback_speed": state.get("playback_speed", 1.0),
     }
 
 # %% ../../nbs/components/helpers.ipynb #a3b4c5d6
