@@ -1,11 +1,30 @@
 [build-system]
-requires = ["setuptools>=64.0,<76.0"]
+requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name="cjm-transcript-segment-align"
-requires-python=">=3.12"
-dynamic = [ "keywords", "description", "version", "dependencies", "optional-dependencies", "readme", "license", "authors", "classifiers", "entry-points", "scripts", "urls"]
+name = "cjm-transcript-segment-align"
+dynamic = ["version"]
+description = "FastHTML dual-column text segmentation & VAD alignment UI for transcript decomposition workflows with forced alignment-based text splitting for aligning text segments with VAD chunks."
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "Apache-2.0"}
+authors = [{name = "Christian J. Mills", email = "9126128+cj-mills@users.noreply.github.com"}]
+keywords = ['nbdev', 'jupyter', 'notebook', 'python']
+classifiers = ["Natural Language :: English", "Intended Audience :: Developers", "Development Status :: 3 - Alpha", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3 :: Only"]
+dependencies = ['cjm-plugin-system', 'cjm_transcription_plugin_system', 'cjm_transcript_segmentation', 'cjm_transcript_vad_align', 'cjm_fasthtml_job_monitor']
 
-[tool.uv]
-cache-keys = [{ file = "pyproject.toml" }, { file = "settings.ini" }, { file = "setup.py" }]
+[project.urls]
+Repository = "https://github.com/cj-mills/cjm-transcript-segment-align"
+Documentation = "https://cj-mills.github.io/cjm-transcript-segment-align"
+
+[project.entry-points.nbdev]
+cjm_transcript_segment_align = "cjm_transcript_segment_align._modidx:d"
+
+[tool.setuptools.dynamic]
+version = {attr = "cjm_transcript_segment_align.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["cjm_transcript_segment_align"]
+
+[tool.nbdev]
