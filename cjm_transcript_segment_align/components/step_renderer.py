@@ -39,6 +39,11 @@ from cjm_fasthtml_card_stack.components.states import render_loading_state
 from cjm_fasthtml_card_stack.components.settings_modal import render_card_stack_settings_modal
 from cjm_fasthtml_card_stack.core.constants import DEFAULT_VISIBLE_COUNT, DEFAULT_CARD_WIDTH
 
+# Web Audio library — for page-level initial speed sync (fires even before user
+# switches to the align toolbar, since the align toolbar isn't initially in the DOM)
+from cjm_fasthtml_web_audio.models import WebAudioConfig
+from cjm_fasthtml_web_audio.components import render_initial_speed_sync
+
 # Local imports
 # HTML IDs (page-specific)
 from ..html_ids import CombinedHtmlIds
@@ -84,6 +89,16 @@ from cjm_transcript_segment_align.components.sync_controls import (
     generate_should_play_js, SHOULD_PLAY_FN,
 )
 from .toolbar_state import generate_toolbar_restore_js
+
+# Config for render_initial_speed_sync — only `namespace` and `enable_speed` are read.
+# The align speed selector lives in the chrome toolbar, which isn't rendered when the
+# seg column is the initial active column. This page-level sync ensures the align JS
+# state reflects persisted speed even before the user switches toolbars.
+_ALIGN_SYNC_CONFIG = WebAudioConfig(
+    namespace="align",
+    indicator_selector="",
+    enable_speed=True,
+)
 
 # Debug flag for combined step rendering tracing (set False in production)
 DEBUG_COMBINED_RENDER = True
@@ -508,6 +523,14 @@ def render_combined_step(
         should_play_script = Script(generate_should_play_js())
         toolbar_restore_script = generate_toolbar_restore_js()
 
+    # Page-level initial-speed sync for the align column. Fires even when the align
+    # toolbar isn't the initial active toolbar, so persisted speed applies on first
+    # chunk playback without the user needing to switch chrome first. No-op at 1.0x.
+    align_initial_speed_sync = render_initial_speed_sync(
+        _ALIGN_SYNC_CONFIG,
+        align_state.get("playback_speed", 1.0),
+    ) if is_align_init else Script("")
+
     if is_seg_init:
         segments = seg_state["segments"]
         focused_index = seg_state["focused_index"]
@@ -647,6 +670,7 @@ def render_combined_step(
         sync_script,
         should_play_script,
         toolbar_restore_script,
+        align_initial_speed_sync,  # Sync JS playbackSpeed to persisted align state on step load
         chrome_switch_btn,
         active_column_input,
         settings_modals_container,  # Both settings modals persist in DOM
