@@ -204,7 +204,7 @@ def render_alignment_status(
 
 
 # Shared footer inner content styling — flex-wrap allows vertical stacking on narrow viewports
-_FOOTER_INNER_CLS = combine_classes(flex_display, flex_wrap.wrap, justify.between, items.center, w.full, gap(4))
+_FOOTER_INNER_CLS = combine_classes(flex_display, flex_wrap.wrap, justify.between, items.center, w.full, gap(1))
 
 
 #| export
