@@ -288,7 +288,7 @@ def _render_shared_chrome(
     toolbar = Div(
         toolbar_content,
         id=CombinedHtmlIds.SHARED_TOOLBAR,
-        cls=str(p(2))
+        cls=str(chrome.column_header)
     )
 
     # --- Footer with both column footers + alignment status ---

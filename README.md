@@ -47,35 +47,35 @@ graph LR
     routes_init[routes.init<br/>routes/init]
     services_forced_alignment[services.forced_alignment<br/>forced_alignment]
 
-    components_handlers --> services_forced_alignment
     components_handlers --> components_step_renderer
-    components_handlers --> html_ids
-    components_handlers --> components_keyboard_config
+    components_handlers --> services_forced_alignment
     components_handlers --> routes_forced_alignment
+    components_handlers --> components_keyboard_config
+    components_handlers --> html_ids
     components_handlers --> components_sync_controls
-    components_keyboard_config --> components_sync_controls
     components_keyboard_config --> html_ids
-    components_step_renderer --> html_ids
+    components_keyboard_config --> components_sync_controls
+    components_step_renderer --> components_helpers
+    components_step_renderer --> components_sync_controls
     components_step_renderer --> components_keyboard_config
     components_step_renderer --> components_toolbar_state
-    components_step_renderer --> components_sync_controls
-    components_step_renderer --> components_helpers
+    components_step_renderer --> html_ids
     components_toolbar_state --> components_sync_controls
-    routes_chrome --> html_ids
-    routes_chrome --> components_handlers
-    routes_chrome --> components_sync_controls
     routes_chrome --> components_step_renderer
+    routes_chrome --> components_handlers
+    routes_chrome --> html_ids
+    routes_chrome --> components_sync_controls
     routes_forced_alignment --> components_step_renderer
     routes_forced_alignment --> html_ids
     routes_forced_alignment --> components_sync_controls
-    routes_init --> services_forced_alignment
-    routes_init --> components_step_renderer
-    routes_init --> components_handlers
-    routes_init --> routes_chrome
-    routes_init --> models
     routes_init --> components_sync_controls
-    routes_init --> html_ids
+    routes_init --> services_forced_alignment
+    routes_init --> models
+    routes_init --> components_handlers
     routes_init --> routes_forced_alignment
+    routes_init --> html_ids
+    routes_init --> routes_chrome
+    routes_init --> components_step_renderer
     routes_init --> components_keyboard_config
 ```
 
