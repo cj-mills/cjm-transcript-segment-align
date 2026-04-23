@@ -15,15 +15,13 @@ from fasthtml.common import Div, H2, P, Span, Input, Button, Script
 # DaisyUI components
 from cjm_fasthtml_daisyui.components.data_display.badge import badge, badge_styles, badge_sizes
 from cjm_fasthtml_daisyui.components.feedback.alert import alert, alert_colors
-from cjm_fasthtml_daisyui.utilities.semantic_colors import bg_dui, text_dui, border_dui, ring_dui
-from cjm_fasthtml_daisyui.utilities.border_radius import border_radius
+from cjm_fasthtml_daisyui.utilities.semantic_colors import text_dui, ring_dui
 
 # Tailwind utilities
 from cjm_fasthtml_tailwind.utilities.spacing import p, m
 from cjm_fasthtml_tailwind.utilities.sizing import w, h, min_h
 from cjm_fasthtml_tailwind.utilities.typography import font_size, font_weight, uppercase, tracking
 from cjm_fasthtml_tailwind.utilities.layout import overflow, position, inset, display_tw
-from cjm_fasthtml_tailwind.utilities.borders import border
 from cjm_fasthtml_tailwind.utilities.effects import opacity, ring
 from cjm_fasthtml_tailwind.utilities.transitions_and_animation import transition, duration
 from cjm_fasthtml_tailwind.utilities.flexbox_and_grid import (
@@ -43,6 +41,10 @@ from cjm_fasthtml_card_stack.core.constants import DEFAULT_VISIBLE_COUNT, DEFAUL
 # switches to the align toolbar, since the align toolbar isn't initially in the DOM)
 from cjm_fasthtml_web_audio.models import WebAudioConfig
 from cjm_fasthtml_web_audio.components import render_initial_speed_sync
+
+# Design system recipes (V10 panel + chrome variants)
+from cjm_fasthtml_design_system.panels import panels
+from cjm_fasthtml_design_system.chrome import chrome
 
 # Local imports
 # HTML IDs (page-specific)
@@ -128,8 +130,7 @@ def _render_column_header(
         id=header_id,
         cls=combine_classes(
             flex_display, justify.between, items.center,
-            p(3), bg_dui.base_200,
-            border_dui.base_300, border.b()
+            chrome.column_header,
         )
     )
 
@@ -317,9 +318,8 @@ def _render_shared_chrome(
         footer_inner,
         id=CombinedHtmlIds.SHARED_FOOTER,
         cls=combine_classes(
-            p(1), bg_dui.base_100,
-            border_dui.base_300, border.t(),
-            flex_display, justify.center, items.center
+            chrome.column_footer,
+            flex_display, justify.center, items.center,
         )
     )
 
@@ -331,8 +331,7 @@ _SEG_COLUMN_CLS = combine_classes(
     w.full, w('[60%]').lg,
     min_h(0),
     flex_display, flex_direction.col,
-    bg_dui.base_200, border_dui.base_300, border(1),
-    border_radius.box,
+    panels.structural_container,
     overflow.hidden,
     transition.all, duration._200,
 )
@@ -384,8 +383,7 @@ _ALIGNMENT_COLUMN_CLS = combine_classes(
     w.full, w('[40%]').lg,
     min_h(0),
     flex_display, flex_direction.col,
-    bg_dui.base_200, border_dui.base_300, border(1),
-    border_radius.box,
+    panels.structural_container,
     overflow.hidden,
     transition.all, duration._200,
 )
