@@ -20,6 +20,9 @@ from cjm_fasthtml_tailwind.utilities.flexbox_and_grid import flex_display, items
 from cjm_fasthtml_tailwind.core.base import combine_classes
 from cjm_fasthtml_lucide_icons.factory import lucide_icon
 
+# Design system recipes (V11 icon-size roles)
+from cjm_fasthtml_design_system.icons import icons
+
 from cjm_workflow_state.state_store import SQLiteWorkflowStateStore
 from cjm_fasthtml_card_stack.core.constants import DEFAULT_VISIBLE_COUNT
 from cjm_transcript_segmentation.models import TextSegment, SegmentationUrls
@@ -58,7 +61,7 @@ def render_fa_toggle(
         Span("Pre-splits:", cls=combine_classes(font_size.sm, m.r(2))),
         Div(
             Button(
-                lucide_icon("text-cursor-input", size=4, cls=str(m.r(1))),
+                lucide_icon("text-cursor-input", size=icons.text_button, cls=str(m.r(1))),
                 "NLTK",
                 cls=nltk_cls,
                 hx_post=toggle_url,
@@ -67,7 +70,7 @@ def render_fa_toggle(
                 disabled="disabled" if nltk_active else None,
             ),
             Button(
-                lucide_icon("audio-waveform", size=4, cls=str(m.r(1))),
+                lucide_icon("audio-waveform", size=icons.text_button, cls=str(m.r(1))),
                 "Force Aligned",
                 cls=fa_cls,
                 hx_post=toggle_url,

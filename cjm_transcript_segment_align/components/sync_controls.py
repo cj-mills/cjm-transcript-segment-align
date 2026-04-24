@@ -18,6 +18,9 @@ from cjm_fasthtml_tailwind.core.base import combine_classes
 
 from cjm_fasthtml_lucide_icons.factory import lucide_icon
 
+# Design system recipes (V11 icon-size roles)
+from cjm_fasthtml_design_system.icons import icons
+
 from cjm_fasthtml_card_stack.js.sync import generate_card_stack_sync_js
 
 # %% ../../nbs/components/sync_controls.ipynb #sync-consts
@@ -34,7 +37,7 @@ SYNC_BTN_ID = "sd-sync-toggle-btn"
 def render_sync_toggle_button() -> Any:  # Sync toggle button element
     """Render the synced navigation toggle button for the seg toolbar."""
     return Button(
-        lucide_icon("link", size=4, cls=str(m.r(1))),
+        lucide_icon("link", size=icons.text_button, cls=str(m.r(1))),
         "Sync",
         id=SYNC_BTN_ID,
         type="button",
