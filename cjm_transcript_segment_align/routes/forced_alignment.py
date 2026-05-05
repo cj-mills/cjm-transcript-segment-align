@@ -12,7 +12,6 @@ from dataclasses import asdict
 from fasthtml.common import Div, Span, Button, APIRouter
 
 from cjm_fasthtml_interactions.core.state_store import get_session_id
-from cjm_fasthtml_daisyui.components.actions.button import btn, btn_colors, btn_sizes, btn_styles
 from cjm_fasthtml_daisyui.components.layout.join import join, join_item
 from cjm_fasthtml_tailwind.utilities.spacing import m
 from cjm_fasthtml_tailwind.utilities.typography import font_size
@@ -20,7 +19,8 @@ from cjm_fasthtml_tailwind.utilities.flexbox_and_grid import flex_display, items
 from cjm_fasthtml_tailwind.core.base import combine_classes
 from cjm_fasthtml_lucide_icons.factory import lucide_icon
 
-# Design system recipes (V11 icon-size roles)
+# Design system recipes (V1 button roles, V11 icon-size roles)
+from cjm_fasthtml_design_system.buttons import buttons
 from cjm_fasthtml_design_system.icons import icons
 
 from cjm_workflow_state.state_store import SQLiteWorkflowStateStore
@@ -44,17 +44,22 @@ def render_fa_toggle(
     active_presplit: str,  # "nltk" or "forced_alignment"
     toggle_url: str,  # URL for toggle route
 ) -> Any:  # Toggle button group
-    """Render the NLTK / Force Aligned toggle button group."""
+    """Render the NLTK / Force Aligned toggle button group.
+
+    Each leg uses primary_action (active) or secondary_action (inactive) — the
+    canonical V1 state-toggle composition — plus join_item for daisyui button
+    group joining.
+    """
     nltk_active = active_presplit == "nltk"
     fa_active = active_presplit == "forced_alignment"
 
     nltk_cls = combine_classes(
-        btn, btn_sizes.sm, join_item,
-        btn_colors.primary if nltk_active else btn_styles.outline
+        buttons.primary_action if nltk_active else buttons.secondary_action,
+        join_item,
     )
     fa_cls = combine_classes(
-        btn, btn_sizes.sm, join_item,
-        btn_colors.primary if fa_active else btn_styles.outline
+        buttons.primary_action if fa_active else buttons.secondary_action,
+        join_item,
     )
 
     return Div(

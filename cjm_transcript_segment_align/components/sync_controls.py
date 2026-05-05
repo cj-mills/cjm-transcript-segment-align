@@ -11,14 +11,14 @@ from typing import Any
 
 from fasthtml.common import Button, Script
 
-from cjm_fasthtml_daisyui.components.actions.button import btn, btn_sizes, btn_styles, btn_colors
 from cjm_fasthtml_daisyui.utilities.semantic_colors import bg_dui
 from cjm_fasthtml_tailwind.utilities.spacing import m
 from cjm_fasthtml_tailwind.core.base import combine_classes
 
 from cjm_fasthtml_lucide_icons.factory import lucide_icon
 
-# Design system recipes (V11 icon-size roles)
+# Design system recipes (V1 button roles, V11 icon-size roles)
+from cjm_fasthtml_design_system.buttons import buttons
 from cjm_fasthtml_design_system.icons import icons
 
 from cjm_fasthtml_card_stack.js.sync import generate_card_stack_sync_js
@@ -35,13 +35,18 @@ SYNC_BTN_ID = "sd-sync-toggle-btn"
 
 # %% ../../nbs/components/sync_controls.ipynb #sync-btn
 def render_sync_toggle_button() -> Any:  # Sync toggle button element
-    """Render the synced navigation toggle button for the seg toolbar."""
+    """Render the synced navigation toggle button for the seg toolbar.
+
+    Initial state: secondary_action (outline neutral = inactive).
+    JS toggle flips between btn-primary and btn-outline (primary_action ↔
+    secondary_action) by manipulating the literal class strings.
+    """
     return Button(
         lucide_icon("link", size=icons.text_button, cls=str(m.r(1))),
         "Sync",
         id=SYNC_BTN_ID,
         type="button",
-        cls=combine_classes(btn, btn_sizes.sm, btn_styles.outline),
+        cls=buttons.secondary_action,
         onclick=(
             f"var on=window.{SYNC_TOGGLE_FN}&&window.{SYNC_TOGGLE_FN}();"
             f"this.classList.toggle('btn-primary',on);"
